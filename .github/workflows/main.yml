@@ -1,0 +1,50 @@
+# اسم الورك فلو بتاعنا
+name: Run Recon
+
+# الخطوة دي هي اللي بتخلي زرار "التشغيل اليدوي" يظهر
+on:
+  workflow_dispatch:
+    # هنا بنعمل "خانة" نكتب فيها الدومين اللي عايزينه
+    inputs:
+      DOMAIN:
+        description: 'Target Domain to scan'
+        required: true
+        default: 'testphp.vulnweb.com'
+
+# الأوامر اللي الروبوت هينفذها
+jobs:
+  recon-job:
+    # الروبوت هيشتغل على كمبيوتر "أوبونتو"
+    runs-on: ubuntu-latest
+
+    steps:
+      # الخطوة 1: تثبيت أداة Subfinder
+      - name: Install Subfinder
+        run: |
+          go install -v github.com/projectdiscovery/subfinder/v2/cmd/subfinder@latest
+          # بننقل الأداة لمكان الروبوت يقدر يشوفه
+          sudo cp /home/runner/go/bin/subfinder /usr/local/bin
+
+      # الخطوة 2: تشغيل Subfinder على الدومين اللي إحنا كتبناه
+      - name: Run Subfinder
+        run: |
+          # السطر ده بيشغل الأداة ويحفظ النتيجة في ملف اسمه results.txt
+          subfinder -d ${{ github.event.inputs.DOMAIN }} -o results.txt
+          # السطر ده بيعرض أول 10 نتايج (عشان نشوفه بس في اللوج)
+          echo "--- Top 10 Results ---"
+          head -n 10 results.txt
+          echo "----------------------"
+
+      # الخطوة 3: إرسال النتيجة لتيليجرام
+      - name: Send results to Telegram
+        run: |
+          # بنجهز الرسالة اللي هتتبعت
+          MESSAGE="✅ Recon finished for: ${{ github.event.inputs.DOMAIN }}
+          Found $(wc -l < results.txt) subdomains.
+          See full results in the attached file."
+
+          # ده الأمر السحري اللي بيبعت الملف والرسالة لتيليجرام
+          curl -s -X POST "https://api.telegram.org/bot${{ secrets.TELEGRAM_TOKEN }}/sendDocument" \
+          -F chat_id="${{ secrets.TELEGRAM_CHAT_ID }}" \
+          -F document=@"results.txt" \
+          -F caption="$MESSAGE"
