@@ -1,50 +1,99 @@
-# اسم الورك فلو بتاعنا
-name: Run Recon
+# اسم الورك فلو القوي بتاعنا
+name: Automated Recon & Scan
 
-# الخطوة دي هي اللي بتخلي زرار "التشغيل اليدوي" يظهر
 on:
+  # 1. التشغيل الأوتوماتيكي (الأتوميشن الحقيقي)
+  schedule:
+    # السطر ده معناه "شغّل الروبوت كل 12 ساعة"
+    # (في الدقيقة 0، كل 12 ساعة)
+    - cron: '0 */12 * * *'
+    
+  # 2. التشغيل اليدوي (علشان لو عايزين نفحص حاجة دلوقتي)
   workflow_dispatch:
-    # هنا بنعمل "خانة" نكتب فيها الدومين اللي عايزينه
     inputs:
       DOMAIN:
-        description: 'Target Domain to scan'
+        description: 'Target Domain (for manual run)'
         required: true
-        default: 'testphp.vulnweb.com'
+        default: 'hackerone.com'
 
-# الأوامر اللي الروبوت هينفذها
 jobs:
-  recon-job:
-    # الروبوت هيشتغل على كمبيوتر "أوبونتو"
+  hunt-job:
     runs-on: ubuntu-latest
-
+    
     steps:
-      # الخطوة 1: تثبيت أداة Subfinder
-      - name: Install Subfinder
+      # الخطوة 1: تثبيت الأدوات (Subfinder و Nuclei)
+      - name: Install Tools
         run: |
           go install -v github.com/projectdiscovery/subfinder/v2/cmd/subfinder@latest
-          # بننقل الأداة لمكان الروبوت يقدر يشوفه
-          sudo cp /home/runner/go/bin/subfinder /usr/local/bin
+          go install -v github.com/projectdiscovery/nuclei/v3/cmd/nuclei@latest
+          # بننقلهم لمكان الروبوت يشوفه
+          sudo cp /home/runner/go/bin/* /usr/local/bin
 
-      # الخطوة 2: تشغيل Subfinder على الدومين اللي إحنا كتبناه
+      # الخطوة 2: تحديد الدومين (أوتوماتيك أو يدوي)
+      - name: Set Target Domain
+        id: target
+        run: |
+          # السطر ده ذكي: لو إنت شغلته يدوي، هياخد الدومين اللي كتبته
+          if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+            echo "TARGET=${{ github.event.inputs.DOMAIN }}" >> $GITHUB_OUTPUT
+          else
+            # لو اشتغل أوتوماتيك، هياخد الدومين الثابت ده
+            # !!! غير "hackerone.com" دي للدومين اللي إنت عايز تراقبه علطول !!!
+            echo "TARGET=hackerone.com" >> $GITHUB_OUTPUT
+          fi
+
+      # الخطوة 3: تشغيل Subfinder (القوي)
       - name: Run Subfinder
+        # هنا بندي للروبوت المفاتيح من "الخزنة"
+        env:
+          # دي الحركة اللي بتصلح مشكلة اسم مفتاح جيت هاب
+          # بنقوله: خد المفتاح اللي اسمه GH_PAT، واديه للأداة بالاسم GITHUB_TOKEN
+          GITHUB_TOKEN: ${{ secrets.GH_PAT }}
+          
+          # باقي المفاتيح بتتقري لوحدها لأن اسمها صح
+          CHAOS_KEY: ${{ secrets.CHAOS_KEY }}
+          SHODAN_API_KEY: ${{ secrets.SHODAN_API_KEY }}
+          SECURITYTRAILS_TOKEN: ${{ secrets.SECURITYTRAILS_TOKEN }}
         run: |
-          # السطر ده بيشغل الأداة ويحفظ النتيجة في ملف اسمه results.txt
-          subfinder -d ${{ github.event.inputs.DOMAIN }} -o results.txt
-          # السطر ده بيعرض أول 10 نتايج (عشان نشوفه بس في اللوج)
-          echo "--- Top 10 Results ---"
-          head -n 10 results.txt
-          echo "----------------------"
+          echo "Scanning target: ${{ steps.target.outputs.TARGET }}"
+          # الروبوت هنا هيستخدم كل المفاتيح دي أوتوماتيك
+          subfinder -d ${{ steps.target.outputs.TARGET }} -o subdomains.txt
+          echo "Found $(wc -l < subdomains.txt) subdomains."
 
-      # الخطوة 3: إرسال النتيجة لتيليجرام
-      - name: Send results to Telegram
+      # الخطوة 4: تشغيل Nuclei (السلاح)
+      - name: Run Nuclei
         run: |
-          # بنجهز الرسالة اللي هتتبعت
-          MESSAGE="✅ Recon finished for: ${{ github.event.inputs.DOMAIN }}
-          Found $(wc -l < results.txt) subdomains.
-          See full results in the attached file."
+          echo "Running Nuclei scan... This might take a while."
+          # السطر ده بيشغل نيوكلي على الدومينات اللي لقاها
+          # وبيفلتر النتايج عشان يجيب الثغرات المهمة بس (متوسطة، عالية، حرجة)
+          nuclei -l subdomains.txt -sev critical,high,medium -o nuclei_results.txt
+          echo "Nuclei scan finished."
 
-          # ده الأمر السحري اللي بيبعت الملف والرسالة لتيليجرام
-          curl -s -X POST "https://api.telegram.org/bot${{ secrets.TELEGRAM_TOKEN }}/sendDocument" \
-          -F chat_id="${{ secrets.TELEGRAM_CHAT_ID }}" \
-          -F document=@"results.txt" \
-          -F caption="$MESSAGE"
+      # الخطوة 5: إرسال تقرير الثغرات لتيليجرام
+      - name: Send Vulnerability Report to Telegram
+        run: |
+          TARGET_DOMAIN=${{ steps.target.outputs.TARGET }}
+          RESULTS_FILE="nuclei_results.txt"
+          
+          # بنشوف الأول: هل الملف ده فاضي ولا فيه ثغرات؟
+          if [ -s "$RESULTS_FILE" ]; then
+            # لو فيه ثغرات
+            FOUND_COUNT=$(wc -l < $RESULTS_FILE)
+            MESSAGE="🚨 VULNERABILITY ALERT on $TARGET_DOMAIN 🚨
+            Nuclei found $FOUND_COUNT new vulnerabilities!
+            See attached report."
+            
+            # ابعت الملف بالثغرات
+            curl -s -X POST "https://api.telegram.org/bot${{ secrets.TELEGRAM_TOKEN }}/sendDocument" \
+            -F chat_id="${{ secrets.TELEGRAM_CHAT_ID }}" \
+            -F document=@"$RESULTS_FILE" \
+            -F caption="$MESSAGE"
+          else
+            # لو مفيش ثغرات (كله تمام)
+            MESSAGE="✅ Scan finished for $TARGET_DOMAIN. No new critical vulnerabilities found. Keep hunting!"
+            
+            # ابعت رسالة طمأنة بس (من غير ملف)
+            curl -s -X POST "https://api.telegram.org/bot${{ secrets.TELEGRAM_TOKEN }}/sendMessage" \
+            -F chat_id="${{ secrets.TELEGRAM_CHAT_ID }}" \
+            -F text="$MESSAGE"
+          fi
