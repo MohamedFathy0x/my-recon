@@ -37,21 +37,21 @@ jobs:
       - name: Checkout Repository (to get "previous_live_subdomains.txt")
         uses: actions/checkout@v4
 
-      # --- الخطوة 3: تحديد الهدف ---
+      # --- الخطوة 3: تحديد الهدف (المتصلحة) ---
       - name: Set Target Domain
-  id: target
-  run: |
-    # بنحدد الدومين الأول في متغير
-    if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
-      T_DOMAIN="${{ github.event.inputs.DOMAIN }}"
-    else
-      # !!! ده الهدف الأوتوماتيك (غيره للهدف اللي إنت عايزه) !!!
-      T_DOMAIN="example.com"
-    fi
-
-    # بنحفظ الدومين "للخطوات الجاية" و "للملخص"
-    echo "TARGET=$T_DOMAIN" >> $GITHUB_OUTPUT
-    echo "TARGET_DOMAIN=$T_DOMAIN" >> $GITHUB_ENV
+        id: target
+        run: |
+          # بنحدد الدومين الأول في متغير
+          T_DOMAIN="${{ github.event.inputs.DOMAIN }}"
+          
+          if [ "$T_DOMAIN" == "" ]; then
+            # لو الروبوت اشتغل أوتوماتيك
+            T_DOMAIN="example.com"
+          fi
+          
+          # بنحفظ الدومين "للخطوات الجاية" و "للملخص"
+          echo "TARGET=$T_DOMAIN" >> $GITHUB_OUTPUT
+          echo "TARGET_DOMAIN=$T_DOMAIN" >> $GITHUB_ENV
   
       # --- الخطوة 4: تشغيل Subfinder (القوي بـ -all والمفاتيح) ---
       - name: Run Subfinder (Full Scan)
