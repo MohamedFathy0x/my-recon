@@ -25,12 +25,15 @@ jobs:
       # --- الخطوة 1: تجهيز الأدوات (الروبوت كامل) ---
       - name: Install Tools (All V5 Tools)
         run: |
+          # تثبيت الأدوات الأساسية (بما فيها coreutils لإصلاح خطأ comm)
           sudo apt-get update && sudo apt-get install -y coreutils
+          # تثبيت أدوات Go
           go install -v github.com/projectdiscovery/subfinder/v2/cmd/subfinder@latest
           go install -v github.com/projectdiscovery/httpx/cmd/httpx@latest
           go install -v github.com/projectdiscovery/nuclei/v3/cmd/nuclei@latest
           go install -v github.com/jaeles-project/gospider@latest
-          go install -v github.com/sensepost/gowitness@latest
+          go install -v github.com/sensepost/gowitness@latest # تم تصحيح مسار gowitness
+          # بننقلهم لمكان الروبوت يشوفه
           sudo cp /home/runner/go/bin/* /usr/local/bin
 
       # --- الخطوة 2: سحب "الذاكرة" القديمة ---
@@ -52,15 +55,19 @@ jobs:
           # بننقل المتغير لـ GITHUB_OUTPUT و GITHUB_ENV علشان كل الخطوات تشوفه
           echo "TARGET=$TARGET_NAME" >> $GITHUB_OUTPUT
           echo "TARGET_DOMAIN=$TARGET_NAME" >> $GITHUB_ENV
-  
-      # --- (الخطوة 4: تشغيل Subfinder) ---
+
+      # --- الخطوة 4: تشغيل Subfinder (القوي بـ -all والمفاتيح) ---
       - name: Run Subfinder (Full Scan)
         env:
-          # ... (المفاتيح) ...
+          GITHUB_TOKEN: ${{ secrets.GH_PAT }}
+          CHAOS_KEY: ${{ secrets.CHAOS_KEY }}
+          SHODAN_API_KEY: ${{ secrets.SHODAN_API_KEY }}
+          SECURITYTRAILS_TOKEN: ${{ secrets.SECURITYTRAILS_TOKEN }}
         run: |
           subfinder -d ${{ env.TARGET_DOMAIN }} -all -o all_subdomains.txt
           
-          # --- (ده سطر التصليح اللي لازم تضيفه) ---
+          # --- (V6 Fix: إغلاق النقطة العمياء) ---
+          # بنضيف النطاق الأصلي للقائمة عشان يتفحص
           echo "${{ env.TARGET_DOMAIN }}" >> all_subdomains.txt
           # -------------------------------------
           
@@ -76,13 +83,11 @@ jobs:
       - name: Compare with Previous Results (Find NEW vs. OLD)
         id: diff
         run: |
-          touch previous_live_subdomains.txt # بنعمل ملف فاضي لو الذاكرة مش موجودة
+          touch previous_live_subdomains.txt
           sort live_subdomains.txt > current_live.txt
           sort previous_live_subdomains.txt > previous_live.txt
           
-          # استراتيجية "الجديد": الأهداف الجديدة بس
           comm -23 current_live.txt previous_live.txt > new_targets.txt
-          # استراتيجية "القديم": الأهداف القديمة بس (اللي لسه عايشة)
           comm -12 current_live.txt previous_live.txt > old_targets.txt
           
           echo "NEW_TARGETS_COUNT=$(wc -l < new_targets.txt)" >> $GITHUB_ENV
@@ -95,11 +100,8 @@ jobs:
         if: env.NEW_TARGETS_COUNT > 0
         run: |
           echo "Running DEEP SCAN on ${{ env.NEW_TARGETS_COUNT }} new targets..."
-          # 1. Nuclei (العميق)
           nuclei -l new_targets.txt -s critical,high,medium -o nuclei_new_results.txt
-          # 2. gowitness (العيون)
           gowitness file -f new_targets.txt -d gowitness_output --disable-db
-          # 3. gospider (الآذان)
           gospider -S new_targets.txt -o gospider_output
           echo "Deep scan finished."
 
@@ -108,14 +110,13 @@ jobs:
         if: env.OLD_TARGETS_COUNT > 0
         run: |
           echo "Running LIGHT SCAN on ${{ env.OLD_TARGETS_COUNT }} old targets..."
-          # Nuclei (الخفيف) - بندور على أخطر حاجة بس
           nuclei -l old_targets.txt -tags takeover,exposure,misconfig,cve -s critical,high -o nuclei_old_results.txt
           echo "Light scan finished."
 
       # --- الخطوة 9: تجميع النتايج (عشان الإنذار الفوري) ---
       - name: Combine Nuclei Results
         run: |
-          touch nuclei_new_results.txt nuclei_old_results.txt # بنعملهم لو فاضيين
+          touch nuclei_new_results.txt nuclei_old_results.txt
           cat nuclei_new_results.txt nuclei_old_results.txt > final_nuclei_results.txt
           echo "VULNS_FOUND=$(wc -l < final_nuclei_results.txt)" >> $GITHUB_ENV
 
