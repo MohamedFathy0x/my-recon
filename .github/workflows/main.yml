@@ -57,7 +57,7 @@ jobs:
         run: |
           echo "Scanning target: ${{ steps.target.outputs.TARGET }}"
           # الروبوت هنا هيستخدم كل المفاتيح دي أوتوماتيك
-          subfinder -d ${{ steps.target.outputs.TARGET }} -o subdomains.txt
+          subfinder -d ${{ steps.target.outputs.TARGET }} -o subdomains.txt -all
           echo "Found $(wc -l < subdomains.txt) subdomains."
 
       # الخطوة 4: تشغيل Nuclei (السلاح)
