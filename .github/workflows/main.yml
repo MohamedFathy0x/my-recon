@@ -39,16 +39,20 @@ jobs:
 
       # --- الخطوة 3: تحديد الهدف ---
       - name: Set Target Domain
-        id: target
-        run: |
-          if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
-            echo "TARGET=${{ github.event.inputs.DOMAIN }}" >> $GITHUB_OUTPUT
-          else
-            # !!! ده الهدف الأوتوماتيك (غيره للهدف اللي إنت عايزه) !!!
-            echo "TARGET=example.com" >> $GITHUB_OUTPUT
-          fi
-          echo "TARGET_DOMAIN=${{ steps.target.outputs.TARGET }}" >> $GITHUB_ENV
+  id: target
+  run: |
+    # بنحدد الدومين الأول في متغير
+    if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+      T_DOMAIN="${{ github.event.inputs.DOMAIN }}"
+    else
+      # !!! ده الهدف الأوتوماتيك (غيره للهدف اللي إنت عايزه) !!!
+      T_DOMAIN="example.com"
+    fi
 
+    # بنحفظ الدومين "للخطوات الجاية" و "للملخص"
+    echo "TARGET=$T_DOMAIN" >> $GITHUB_OUTPUT
+    echo "TARGET_DOMAIN=$T_DOMAIN" >> $GITHUB_ENV
+  
       # --- الخطوة 4: تشغيل Subfinder (القوي بـ -all والمفاتيح) ---
       - name: Run Subfinder (Full Scan)
         env:
