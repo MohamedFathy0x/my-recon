@@ -1,10 +1,9 @@
-# اسم الورك فلو: "الروبوت الأقوى" V3
+# اسم الورك فلو: "الروبوت الأقوى" V3 (بلاصلاح comm)
 name: V3 - Smart Recon & Vulnerability Hunter
 
 on:
   # 1. التشغيل الأوتوماتيكي (كل 12 ساعة)
   schedule:
-    # (في الدقيقة 0، كل 12 ساعة - زي ما طلبت)
     - cron: '0 */12 * * *'
     
   # 2. التشغيل اليدوي (للفحص الفوري)
@@ -19,14 +18,18 @@ jobs:
   hunt-job:
     runs-on: ubuntu-latest
     
-    # هذه الأذونات ضرورية عشان الروبوت "يحفظ ذاكرته" (يعمل git push)
     permissions:
       contents: write
       
     steps:
-      # --- الخطوة 1: تجهيز الأدوات ---
-      - name: Install Tools (Subfinder, httpx, Nuclei)
+      # --- الخطوة 1: تجهيز الأدوات (مع التصليح) ---
+      - name: Install Tools (Subfinder, httpx, Nuclei, coreutils)
         run: |
+          # --- (ده سطر التصليح) ---
+          # بنثبت الأداة اللي كانت ناقصة (comm)
+          sudo apt-get update && sudo apt-get install -y coreutils
+          # --- (نهاية سطر التصليح) ---
+          
           go install -v github.com/projectdiscovery/subfinder/v2/cmd/subfinder@latest
           go install -v github.com/projectdiscovery/httpx/cmd/httpx@latest
           go install -v github.com/projectdiscovery/nuclei/v3/cmd/nuclei@latest
@@ -34,7 +37,6 @@ jobs:
           sudo cp /home/runner/go/bin/* /usr/local/bin
 
       # --- الخطوة 2: سحب "الذاكرة" القديمة ---
-      # الروبوت بيسحب الملفات القديمة من الـ Repo عشان يفتكر
       - name: Checkout Repository (to get "previous_subdomains.txt")
         uses: actions/checkout@v4
 
@@ -46,8 +48,7 @@ jobs:
             echo "TARGET=${{ github.event.inputs.DOMAIN }}" >> $GITHUB_OUTPUT
           else
             # !!! ده الهدف الأوتوماتيك (غيره للهدف اللي إنت عايزه) !!!
-            # استخدم هدف آمن زي example.com لو بتجرب
-            [cite_start]echo "TARGET=example.com" >> $GITHUB_OUTPUT [cite: 36]
+            echo "TARGET=example.com" >> $GITHUB_OUTPUT
           fi
           echo "TARGET_DOMAIN=${{ steps.target.outputs.TARGET }}" >> $GITHUB_ENV
 
@@ -74,15 +75,12 @@ jobs:
       - name: Compare with Previous Results (Find NEW targets only)
         id: diff
         run: |
-          # بنعمل ملف فاضي لو الذاكرة مش موجودة
           touch previous_live_subdomains.txt
-          
-          # بنرتب الملفين عشان نقارنهم
           sort live_subdomains.txt > current_live.txt
           sort previous_live_subdomains.txt > previous_live.txt
           
-          # الأمر "comm" العبقري: بيجيب "الدومينات الجديدة بس"
-          [cite_start]comm -23 current_live.txt previous_live.txt > new_targets.txt [cite: 8]
+          # الأمر "comm" دلوقتي هيشتغل 100%
+          comm -23 current_live.txt previous_live.txt > new_targets.txt
           
           echo "NEW_TARGETS_COUNT=$(wc -l < new_targets.txt)" >> $GITHUB_ENV
           echo "Total live targets: $(wc -l < current_live.txt)"
@@ -105,8 +103,7 @@ jobs:
         if: env.VULNS_FOUND > 0
         run: |
           echo "Sending ${{ env.VULNS_FOUND }} vulnerabilities to Telegram..."
-          # اللفة العبقرية: بيبعت رسالة لكل سطر في ملف النتايج
-          [cite_start]while IFS= read -r vuln; do [cite: 45]
+          while IFS= read -r vuln; do
             MESSAGE="🚨 VULNERABILITY ALERT 🚨
             **Target:** ${{ env.TARGET_DOMAIN }}
             **Finding:**
@@ -114,14 +111,13 @@ jobs:
             $vuln
             \`\`\`"
             
-            # بنستخدم curl لإرسال الرسالة (بنفس الأسرار بتاعتنا)
             curl -s -X POST "https://api.telegram.org/bot${{ secrets.TELEGRAM_TOKEN }}/sendMessage" \
             -d chat_id="${{ secrets.TELEGRAM_CHAT_ID }}" \
             -d text="$MESSAGE" \
             -d parse_mode="Markdown"
             
-            [cite_start]sleep 1 # بنستنى ثانية عشان تيليجرام ميعملناش بلوك [cite: 47]
-          [cite_start]done < nuclei_results.txt [cite: 47]
+            sleep 1
+          done < nuclei_results.txt
 
       # --- الخطوة 9: إرسال "تقرير الملخص" ---
       - name: Send Summary Report
@@ -144,23 +140,19 @@ jobs:
       # --- الخطوة 10: "حفظ الذاكرة" (للمرة الجاية) ---
       - name: Update Previous Results (Save Memory)
         run: |
-          # بنمسح الذاكرة القديمة
           rm -f previous_live_subdomains.txt
-          # بنحفظ الذاكرة الجديدة (اللي فيها كل الدومينات الحية)
           mv live_subdomains.txt previous_live_subdomains.txt
           echo "Memory updated for next run."
 
       # --- الخطوة 11: حفظ الذاكرة في الـ Repo ---
-      # دي أهم خطوة عشان "نفتكر" المرة الجاية
       - name: Commit and Push Memory File
         run: |
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
           git add previous_live_subdomains.txt
-          # بنشوف لو فيه تغييرات
-          [cite_start]if git diff --staged --quiet; then [cite: 29]
-            [cite_start]echo "No changes to commit. Memory is up-to-date." [cite: 30]
+          if git diff --staged --quiet; then
+            echo "No changes to commit. Memory is up-to-date."
           else
             git commit -m "V3 Bot: Update subdomain memory file"
-            [cite_start]git push [cite: 30]
+            git push
           fi
