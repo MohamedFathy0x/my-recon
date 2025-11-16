@@ -53,15 +53,17 @@ jobs:
           echo "TARGET=$TARGET_NAME" >> $GITHUB_OUTPUT
           echo "TARGET_DOMAIN=$TARGET_NAME" >> $GITHUB_ENV
   
-      # --- الخطوة 4: تشغيل Subfinder (القوي بـ -all والمفاتيح) ---
+      # --- (الخطوة 4: تشغيل Subfinder) ---
       - name: Run Subfinder (Full Scan)
         env:
-          GITHUB_TOKEN: ${{ secrets.GH_PAT }}
-          CHAOS_KEY: ${{ secrets.CHAOS_KEY }}
-          SHODAN_API_KEY: ${{ secrets.SHODAN_API_KEY }}
-          SECURITYTRAILS_TOKEN: ${{ secrets.SECURITYTRAILS_TOKEN }}
+          # ... (المفاتيح) ...
         run: |
           subfinder -d ${{ env.TARGET_DOMAIN }} -all -o all_subdomains.txt
+          
+          # --- (ده سطر التصليح اللي لازم تضيفه) ---
+          echo "${{ env.TARGET_DOMAIN }}" >> all_subdomains.txt
+          # -------------------------------------
+          
           echo "Found $(wc -l < all_subdomains.txt) total subdomains."
 
       # --- الخطوة 5: الفلترة الحية (httpx) ---
