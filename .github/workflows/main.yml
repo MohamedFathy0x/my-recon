@@ -1,5 +1,5 @@
-# اسم الورك فلو: "الروبوت الأقوى" V3 (بلاصلاح comm)
-name: V3 - Smart Recon & Vulnerability Hunter
+# اسم الورك فلو: "الروبوت الأقوى" V4 (النموذج النهائي)
+name: V4 - Professional Hunter (Recon + Visual + JS + Scan)
 
 on:
   # 1. التشغيل الأوتوماتيكي (كل 12 ساعة)
@@ -19,25 +19,25 @@ jobs:
     runs-on: ubuntu-latest
     
     permissions:
-      contents: write
+      contents: write # ضروري عشان "يحفظ الذاكرة"
       
     steps:
-      # --- الخطوة 1: تجهيز الأدوات (مع التصليح) ---
-      - name: Install Tools (Subfinder, httpx, Nuclei, coreutils)
+      # --- الخطوة 1: تجهيز الأدوات (الروبوت كامل) ---
+      - name: Install Tools (All V4 Tools)
         run: |
-          # --- (ده سطر التصليح) ---
-          # بنثبت الأداة اللي كانت ناقصة (comm)
+          # تثبيت الأدوات الأساسية (بما فيها أداة الذاكرة)
           sudo apt-get update && sudo apt-get install -y coreutils
-          # --- (نهاية سطر التصليح) ---
-          
+          # تثبيت أدوات (Go)
           go install -v github.com/projectdiscovery/subfinder/v2/cmd/subfinder@latest
           go install -v github.com/projectdiscovery/httpx/cmd/httpx@latest
           go install -v github.com/projectdiscovery/nuclei/v3/cmd/nuclei@latest
+          go install -v github.com/jaeles-project/gospider@latest
+          go install -v github.com/sensepost/gowitness/cmd/gowitness@latest
           # بننقلهم لمكان الروبوت يشوفه
           sudo cp /home/runner/go/bin/* /usr/local/bin
 
       # --- الخطوة 2: سحب "الذاكرة" القديمة ---
-      - name: Checkout Repository (to get "previous_subdomains.txt")
+      - name: Checkout Repository (to get "previous_live_subdomains.txt")
         uses: actions/checkout@v4
 
       # --- الخطوة 3: تحديد الهدف ---
@@ -75,18 +75,16 @@ jobs:
       - name: Compare with Previous Results (Find NEW targets only)
         id: diff
         run: |
-          touch previous_live_subdomains.txt
+          touch previous_live_subdomains.txt # بنعمل ملف فاضي لو الذاكرة مش موجودة
           sort live_subdomains.txt > current_live.txt
           sort previous_live_subdomains.txt > previous_live.txt
-          
-          # الأمر "comm" دلوقتي هيشتغل 100%
-          comm -23 current_live.txt previous_live.txt > new_targets.txt
+          comm -23 current_live.txt previous_live.txt > new_targets.txt # الأهداف الجديدة بس
           
           echo "NEW_TARGETS_COUNT=$(wc -l < new_targets.txt)" >> $GITHUB_ENV
           echo "Total live targets: $(wc -l < current_live.txt)"
           echo "New targets to scan: $(wc -l < new_targets.txt)"
 
-      # --- الخطوة 7: تشغيل Nuclei (على الأهداف الجديدة فقط) ---
+      # --- الخطوة 7: الفحص الجراحي (Nuclei - على الجديد فقط) ---
       - name: Run Nuclei (on NEW targets only)
         run: |
           if [ ${{ env.NEW_TARGETS_COUNT }} -gt 0 ]; then
@@ -98,8 +96,24 @@ jobs:
             echo "VULNS_FOUND=0" >> $GITHUB_ENV
           fi
 
-      # --- الخطوة 8: "الإنذار الفوري" (لكل ثغرة) ---
-      - name: Send Individual Vulnerabilities to Telegram
+      # --- الخطوة 8: "العيون البصرية" (gowitness - على الجديد فقط) ---
+      - name: Run Visual Recon (gowitness)
+        if: env.NEW_TARGETS_COUNT > 0
+        run: |
+          echo "Taking screenshots of new targets..."
+          gowitness file -f new_targets.txt -d gowitness_output --disable-db
+          echo "Screenshots saved in 'gowitness_output/screenshots'"
+
+      # --- الخطوة 9: "حاسة السمع" (gospider - على الجديد فقط) ---
+      - name: Run JS/Endpoint Mining (gospider)
+        if: env.NEW_TARGETS_COUNT > 0
+        run: |
+          echo "Mining JS files and endpoints..."
+          gospider -S new_targets.txt -o gospider_output
+          echo "JS/Endpoint data saved in 'gospider_output'"
+
+      # --- الخطوة 10: "الإنذار الفوري" (لكل ثغرة Nuclei) ---
+      - name: Send Individual Nuclei Alerts to Telegram
         if: env.VULNS_FOUND > 0
         run: |
           echo "Sending ${{ env.VULNS_FOUND }} vulnerabilities to Telegram..."
@@ -115,36 +129,54 @@ jobs:
             -d chat_id="${{ secrets.TELEGRAM_CHAT_ID }}" \
             -d text="$MESSAGE" \
             -d parse_mode="Markdown"
-            
             sleep 1
           done < nuclei_results.txt
 
-      # --- الخطوة 9: إرسال "تقرير الملخص" ---
+      # --- الخطوة 11: أرشفة النتايج (السكرين شوتس والـ JS) ---
+      - name: Upload Recon Artifacts (Screenshots & JS Maps)
+        if: env.NEW_TARGETS_COUNT > 0
+        uses: actions/upload-artifact@v4
+        with:
+          name: V4-Recon-Artifacts
+          path: |
+            gowitness_output/screenshots/
+            gospider_output/
+          retention-days: 7 # بنحتفظ بالأرشيف ده 7 أيام بس
+
+      # --- الخطوة 12: إرسال "تقرير الملخص" ---
       - name: Send Summary Report
         run: |
           if [ ${{ env.VULNS_FOUND }} -gt 0 ]; then
-            SUMMARY_MSG="✅ **Scan Complete (V3)**
-            **Target:** ${{ env.TARGET_DOMAIN }}
-            **🚨 Found ${{ env.VULNS_FOUND }} new vulnerabilities!** (Sent individually)"
-          else
-            SUMMARY_MSG="✅ **Scan Complete (V3)**
+            SUMMARY_MSG="✅ **Scan Complete (V4)**
             **Target:** ${{ env.TARGET_DOMAIN }}
             **New Live Targets:** ${{ env.NEW_TARGETS_COUNT }}
-            **No new vulnerabilities found.** Keep hunting!"
+            **🚨 Found ${{ env.VULNS_FOUND }} new vulnerabilities!** (Sent individually)
+            
+            **NEW (Manual Recon):** Screenshots & JS Maps are ready. Go to GitHub Actions to download 'V4-Recon-Artifacts'."
+          else
+            SUMMARY_MSG="✅ **Scan Complete (V4)**
+            **Target:** ${{ env.TARGET_DOMAIN }}
+            **New Live Targets:** ${{ env.NEW_TARGETS_COUNT }}
+            **No new Nuclei vulnerabilities found.**
+            
+            **NEW (Manual Recon):** Screenshots & JS Maps are ready. Go to GitHub Actions to download 'V4-Recon-Artifacts'."
           fi
           
-          curl -s -X POST "https://api.telegram.org/bot${{ secrets.TELEGRAM_TOKEN }}/sendMessage" \
-          -d chat_id="${{ secrets.TELEGRAM_CHAT_ID }}" \
-          -d text="$SUMMARY_MSG"
+          # بنبعت الملخص ده بس لو فيه أهداف جديدة (عشان منعملش دوشة)
+          if [ ${{ env.NEW_TARGETS_COUNT }} -gt 0 ]; then
+             curl -s -X POST "https://api.telegram.org/bot${{ secrets.TELEGRAM_TOKEN }}/sendMessage" \
+             -d chat_id="${{ secrets.TELEGRAM_CHAT_ID }}" \
+             -d text="$SUMMARY_MSG"
+          fi
 
-      # --- الخطوة 10: "حفظ الذاكرة" (للمرة الجاية) ---
+      # --- الخطوة 13: "حفظ الذاكرة" (للمرة الجاية) ---
       - name: Update Previous Results (Save Memory)
         run: |
           rm -f previous_live_subdomains.txt
           mv live_subdomains.txt previous_live_subdomains.txt
           echo "Memory updated for next run."
 
-      # --- الخطوة 11: حفظ الذاكرة في الـ Repo ---
+      # --- الخطوة 14: حفظ الذاكرة في الـ Repo ---
       - name: Commit and Push Memory File
         run: |
           git config --global user.name "github-actions[bot]"
@@ -153,6 +185,6 @@ jobs:
           if git diff --staged --quiet; then
             echo "No changes to commit. Memory is up-to-date."
           else
-            git commit -m "V3 Bot: Update subdomain memory file"
+            git commit -m "V4 Bot: Update subdomain memory file"
             git push
           fi
