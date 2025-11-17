@@ -17,11 +17,28 @@ jobs:
       contents: write
       
     steps:
-      # 1. التثبيت السريع (بدون go install البطيئة)
-      - name: Install Tools (Fast Action)
-        uses: projectdiscovery/tools-installer-action@v1
-        with:
-          tools: "subfinder,httpx,nuclei"
+      # 1. التثبيت السريع (Direct Binary Download - The Hacker Way)
+      # هذا الكود يحمل الأدوات جاهزة دون تضييع وقت في بنائها
+      - name: Install Tools (Manual & Fast)
+        run: |
+          # Install Subfinder
+          wget -q https://github.com/projectdiscovery/subfinder/releases/download/v2.6.6/subfinder_2.6.6_linux_amd64.zip
+          unzip -q subfinder_2.6.6_linux_amd64.zip
+          sudo mv subfinder /usr/local/bin/
+
+          # Install Httpx
+          wget -q https://github.com/projectdiscovery/httpx/releases/download/v1.6.0/httpx_1.6.0_linux_amd64.zip
+          unzip -q httpx_1.6.0_linux_amd64.zip
+          sudo mv httpx /usr/local/bin/
+
+          # Install Nuclei
+          wget -q https://github.com/projectdiscovery/nuclei/releases/download/v3.2.9/nuclei_3.2.9_linux_amd64.zip
+          unzip -q nuclei_3.2.9_linux_amd64.zip
+          sudo mv nuclei /usr/local/bin/
+          
+          # Clean up
+          rm *.zip
+          echo "Tools installed successfully!"
 
       # 2. تثبيت أداة الذاكرة فقط
       - name: Install Coreutils
