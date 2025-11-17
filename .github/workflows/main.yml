@@ -1,63 +1,50 @@
-# اسم الورك فلو: "الروبوت الأقوى" V5 (النموذج النهائي)
-name: V5 - Dual-Strategy Hunter (Deep, Light, Visual, JS)
+name: V8 - Optimized Sniper Hunter (Fast, Stealth, No Bloat)
 
 on:
-  # 1. التشغيل الأوتوماتيكي (كل 12 ساعة)
   schedule:
-    - cron: '0 */12 * * *'
-    
-  # 2. التشغيل اليدوي (للفحص الفوري)
+    - cron: '0 */12 * * *' # كل 12 ساعة
   workflow_dispatch:
     inputs:
       DOMAIN:
-        description: 'Target Domain (for manual run)'
+        description: 'Target Domain'
         required: true
         default: 'testphp.vulnweb.com'
 
 jobs:
   hunt-job:
     runs-on: ubuntu-latest
-    
     permissions:
-      contents: write # ضروري عشان "يحفظ الذاكرة"
+      contents: write
       
     steps:
-      # --- الخطوة 1: تجهيز الأدوات (الروبوت كامل) ---
-      - name: Install Tools (All V5 Tools)
-        run: |
-          # تثبيت الأدوات الأساسية (بما فيها coreutils لإصلاح خطأ comm)
-          sudo apt-get update && sudo apt-get install -y coreutils
-          # تثبيت أدوات Go
-          go install -v github.com/projectdiscovery/subfinder/v2/cmd/subfinder@latest
-          go install -v github.com/projectdiscovery/httpx/cmd/httpx@latest
-          go install -v github.com/projectdiscovery/nuclei/v3/cmd/nuclei@latest
-          go install -v github.com/jaeles-project/gospider@latest
-          go install -v github.com/sensepost/gowitness@latest # تم تصحيح مسار gowitness
-          # بننقلهم لمكان الروبوت يشوفه
-          sudo cp /home/runner/go/bin/* /usr/local/bin
+      # 1. التثبيت السريع (بدون go install البطيئة)
+      - name: Install Tools (Fast Action)
+        uses: projectdiscovery/tools-installer-action@v1
+        with:
+          tools: "subfinder,httpx,nuclei"
 
-      # --- الخطوة 2: سحب "الذاكرة" القديمة ---
-      - name: Checkout Repository (to get "previous_live_subdomains.txt")
+      # 2. تثبيت أداة الذاكرة فقط
+      - name: Install Coreutils
+        run: sudo apt-get update && sudo apt-get install -y coreutils
+
+      # 3. استرجاع الذاكرة
+      - name: Checkout Memory
         uses: actions/checkout@v4
 
-      # --- الخطوة 3: تحديد الهدف (المتصلحة النهائية) ---
-      - name: Set Target Domain
+      # 4. تحديد الهدف (المنطق السليم)
+      - name: Set Target
         id: target
         run: |
-          # الكود ده بيتأكد الأول: هل التشغيل "يدوي"؟
           if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
             TARGET_NAME="${{ github.event.inputs.DOMAIN }}"
           else
-            # لو التشغيل آلي (Schedule)، بنستخدم الهدف الثابت المكتوب
-            TARGET_NAME="example.com"
+            TARGET_NAME="example.com" # هدفك الأوتوماتيك (غيره هنا)
           fi
-          
-          # بننقل المتغير لـ GITHUB_OUTPUT و GITHUB_ENV علشان كل الخطوات تشوفه
           echo "TARGET=$TARGET_NAME" >> $GITHUB_OUTPUT
           echo "TARGET_DOMAIN=$TARGET_NAME" >> $GITHUB_ENV
 
-      # --- الخطوة 4: تشغيل Subfinder (القوي بـ -all والمفاتيح) ---
-      - name: Run Subfinder (Full Scan)
+      # 5. البحث (Subfinder)
+      - name: Run Subfinder
         env:
           GITHUB_TOKEN: ${{ secrets.GH_PAT }}
           CHAOS_KEY: ${{ secrets.CHAOS_KEY }}
@@ -65,138 +52,116 @@ jobs:
           SECURITYTRAILS_TOKEN: ${{ secrets.SECURITYTRAILS_TOKEN }}
         run: |
           subfinder -d ${{ env.TARGET_DOMAIN }} -all -o all_subdomains.txt
-          
-          # --- (V6 Fix: إغلاق النقطة العمياء) ---
-          # بنضيف النطاق الأصلي للقائمة عشان يتفحص
+          # إضافة النطاق الأصلي للفحص
           echo "${{ env.TARGET_DOMAIN }}" >> all_subdomains.txt
-          # -------------------------------------
-          
-          echo "Found $(wc -l < all_subdomains.txt) total subdomains."
 
-      # --- الخطوة 5: الفلترة الحية (httpx) ---
-      - name: Filter Live Subdomains (httpx)
+      # 6. فلترة الأحياء (httpx)
+      - name: Filter Live Hosts
         run: |
           httpx -l all_subdomains.txt -o live_subdomains.txt
-          echo "Found $(wc -l < live_subdomains.txt) live subdomains."
+          echo "Live targets: $(wc -l < live_subdomains.txt)"
 
-      # --- الخطوة 6: "الذاكرة" (تقسيم الأهداف لـ "جديد" و "قديم") ---
-      - name: Compare with Previous Results (Find NEW vs. OLD)
+      # 7. منطق الذاكرة (الجديد vs القديم)
+      - name: Diff & Memory Logic
         id: diff
         run: |
           touch previous_live_subdomains.txt
           sort live_subdomains.txt > current_live.txt
           sort previous_live_subdomains.txt > previous_live.txt
           
+          # الجديد
           comm -23 current_live.txt previous_live.txt > new_targets.txt
+          # القديم
           comm -12 current_live.txt previous_live.txt > old_targets.txt
           
-          echo "NEW_TARGETS_COUNT=$(wc -l < new_targets.txt)" >> $GITHUB_ENV
-          echo "OLD_TARGETS_COUNT=$(wc -l < old_targets.txt)" >> $GITHUB_ENV
-          echo "New targets to scan: $(cat new_targets.txt | wc -l)"
-          echo "Old targets to monitor: $(cat old_targets.txt | wc -l)"
+          echo "NEW_COUNT=$(wc -l < new_targets.txt)" >> $GITHUB_ENV
+          echo "OLD_COUNT=$(wc -l < old_targets.txt)" >> $GITHUB_ENV
 
-      # --- الخطوة 7: استراتيجية "الجديد" (الفحص العميق) ---
-      - name: Run Deep Scan (Nuclei, gowitness, gospider) on NEW Targets
-        if: env.NEW_TARGETS_COUNT > 0
+      # 8. تبليغ عن أهداف جديدة فوراً
+      - name: Notify New Targets
+        if: env.NEW_COUNT > 0
         run: |
-          echo "Running DEEP SCAN on ${{ env.NEW_TARGETS_COUNT }} new targets..."
-          nuclei -l new_targets.txt -s critical,high,medium -o nuclei_new_results.txt
-          gowitness file -f new_targets.txt -d gowitness_output --disable-db
-          gospider -S new_targets.txt -o gospider_output
-          echo "Deep scan finished."
+          TOP_TARGETS=$(head -n 10 new_targets.txt)
+          MSG="🎯 **NEW TARGETS FOUND!**
+          Target: ${{ env.TARGET_DOMAIN }}
+          Count: ${{ env.NEW_COUNT }}
+          \`\`\`
+          $TOP_TARGETS
+          \`\`\`
+          *(Go hunt manually!)*"
+          curl -s -X POST "https://api.telegram.org/bot${{ secrets.TELEGRAM_TOKEN }}/sendMessage" \
+            -d chat_id="${{ secrets.TELEGRAM_CHAT_ID }}" \
+            -d text="$MSG" -d parse_mode="Markdown"
 
-      # --- الخطوة 8: استراتيجية "القديم" (الفحص الخفيف) ---
-      - name: Run Light Scan (Nuclei Tags) on OLD Targets
-        if: env.OLD_TARGETS_COUNT > 0
+      # 9. فحص الجديد (Nuclei Stealth Mode)
+      - name: Nuclei Scan (NEW Targets)
+        if: env.NEW_COUNT > 0
         run: |
-          echo "Running LIGHT SCAN on ${{ env.OLD_TARGETS_COUNT }} old targets..."
-          nuclei -l old_targets.txt -tags takeover,exposure,misconfig,cve -s critical,high -o nuclei_old_results.txt
-          echo "Light scan finished."
+          # إعدادات التخفي والسرعة (-rl 50 -bs 5)
+          nuclei -l new_targets.txt -s critical,high,medium -rl 50 -bs 5 -c 10 -o nuclei_new.txt
 
-      # --- الخطوة 9: تجميع النتايج (عشان الإنذار الفوري) ---
-      - name: Combine Nuclei Results
+      # 10. فحص القديم (Light Stealth Mode)
+      - name: Nuclei Scan (OLD Targets)
+        if: env.OLD_COUNT > 0
         run: |
-          touch nuclei_new_results.txt nuclei_old_results.txt
-          cat nuclei_new_results.txt nuclei_old_results.txt > final_nuclei_results.txt
-          echo "VULNS_FOUND=$(wc -l < final_nuclei_results.txt)" >> $GITHUB_ENV
+          # فحص خفيف للقديم
+          nuclei -l old_targets.txt -tags takeover,exposure,misconfig -s high,critical -rl 50 -bs 5 -c 10 -o nuclei_old.txt
 
-      # --- الخطوة 10: "الإنذار الفوري" (لكل ثغرة) ---
-      - name: Send Individual Nuclei Alerts to Telegram
+      # 11. تجميع النتائج
+      - name: Combine Results
+        run: |
+          touch nuclei_new.txt nuclei_old.txt
+          cat nuclei_new.txt nuclei_old.txt > final_results.txt
+          echo "VULNS_FOUND=$(wc -l < final_results.txt)" >> $GITHUB_ENV
+
+      # 12. الإرسال الفوري للثغرات
+      - name: Send Alerts
         if: env.VULNS_FOUND > 0
         run: |
-          echo "Sending ${{ env.VULNS_FOUND }} total vulnerabilities to Telegram..."
           while IFS= read -r vuln; do
-            MESSAGE="🚨 VULNERABILITY ALERT 🚨
-            **Target:** ${{ env.TARGET_DOMAIN }}
-            **Finding:**
+            MSG="🚨 **VULNERABILITY ALERT**
+            Target: ${{ env.TARGET_DOMAIN }}
             \`\`\`
             $vuln
             \`\`\`"
-            
             curl -s -X POST "https://api.telegram.org/bot${{ secrets.TELEGRAM_TOKEN }}/sendMessage" \
             -d chat_id="${{ secrets.TELEGRAM_CHAT_ID }}" \
-            -d text="$MESSAGE" \
-            -d parse_mode="Markdown"
+            -d text="$MSG" -d parse_mode="Markdown"
             sleep 1
-          done < final_nuclei_results.txt
+          done < final_results.txt
 
-      # --- الخطوة 11: أرشفة النتايج (السكرين شوتس والـ JS) ---
-      - name: Upload Recon Artifacts (Screenshots & JS Maps)
-        if: env.NEW_TARGETS_COUNT > 0
-        uses: actions/upload-artifact@v4
-        with:
-          name: V5-Recon-Artifacts
-          path: |
-            gowitness_output/screenshots/
-            gospider_output/
-          retention-days: 7
-
-      # --- الخطوة 12: إرسال "تقرير الملخص" ---
-      - name: Send Summary Report
+      # 13. تقرير الملخص
+      - name: Send Summary
         run: |
-          # بنجهز الملخص
           if [ ${{ env.VULNS_FOUND }} -gt 0 ]; then
-            SUMMARY_MSG="✅ **Scan Complete (V5)**
-            **Target:** ${{ env.TARGET_DOMAIN }}
-            **New Live Targets:** ${{ env.NEW_TARGETS_COUNT }}
-            **Monitored Old Targets:** ${{ env.OLD_TARGETS_COUNT }}
-            **🚨 Found ${{ env.VULNS_FOUND }} total vulnerabilities!** (Sent individually)"
+            SUMMARY="✅ **Scan Complete**\nTarget: ${{ env.TARGET_DOMAIN }}\n🚨 Found: ${{ env.VULNS_FOUND }} vulns"
           else
-            SUMMARY_MSG="✅ **Scan Complete (V5)**
-            **Target:** ${{ env.TARGET_DOMAIN }}
-            **New Live Targets:** ${{ env.NEW_TARGETS_COUNT }}
-            **Monitored Old Targets:** ${{ env.OLD_TARGETS_COUNT }}
-            **No new vulnerabilities found.**"
+            SUMMARY="✅ **Scan Complete**\nTarget: ${{ env.TARGET_DOMAIN }}\nNew Targets: ${{ env.NEW_TARGETS_COUNT }}\nNo new vulns."
           fi
           
-          # بنضيف معلومة الأرشيف لو موجود
-          if [ ${{ env.NEW_TARGETS_COUNT }} -gt 0 ]; then
-            SUMMARY_MSG="$SUMMARY_MSG
-
-            **NEW (Manual Recon):** Screenshots & JS Maps are ready. Go to GitHub Actions to download 'V5-Recon-Artifacts'."
+          # يرسل الملخص فقط لو فيه جديد أو ثغرات لتقليل الدوشة
+          if [ ${{ env.NEW_TARGETS_COUNT }} -gt 0 ] || [ ${{ env.VULNS_FOUND }} -gt 0 ]; then
+             curl -s -X POST "https://api.telegram.org/bot${{ secrets.TELEGRAM_TOKEN }}/sendMessage" \
+             -d chat_id="${{ secrets.TELEGRAM_CHAT_ID }}" \
+             -d text="$SUMMARY"
           fi
-          
-          # بنبعت الملخص
-          curl -s -X POST "https://api.telegram.org/bot${{ secrets.TELEGRAM_TOKEN }}/sendMessage" \
-          -d chat_id="${{ secrets.TELEGRAM_CHAT_ID }}" \
-          -d text="$SUMMARY_MSG"
 
-      # --- الخطوة 13: "حفظ الذاكرة" (للمرة الجاية) ---
-      - name: Update Previous Results (Save Memory)
+      # 14. حفظ الذاكرة (مع الحماية Rebase)
+      - name: Save Memory
         run: |
           rm -f previous_live_subdomains.txt
           mv current_live.txt previous_live_subdomains.txt
-          echo "Memory updated for next run."
-
-      # --- الخطوة 14: حفظ الذاكرة في الـ Repo ---
-      - name: Commit and Push Memory File
-        run: |
-          git config --global user.name "github-actions[bot]"
-          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          
+          git config --global user.name "bot"
+          git config --global user.email "bot@noreply.com"
+          
+          # سحب التغييرات أولاً لتجنب التضارب
+          git pull origin main --rebase || echo "No changes"
+          
           git add previous_live_subdomains.txt
           if git diff --staged --quiet; then
-            echo "No changes to commit. Memory is up-to-date."
+            echo "No changes to commit."
           else
-            git commit -m "V5 Bot: Update subdomain memory file"
+            git commit -m "Update memory"
             git push
           fi
