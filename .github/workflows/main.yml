@@ -1,8 +1,8 @@
-name: V10 - The Masterpiece (Stable & Smart)
+name: V9.2 - Smart Hunter (Stable & Fixed)
 
 on:
   schedule:
-    - cron: '0 */12 * * *' # كل 12 ساعة
+    - cron: '0 */12 * * *'
   workflow_dispatch:
     inputs:
       DOMAIN:
@@ -13,89 +13,89 @@ on:
 jobs:
   hunt-job:
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
     
     steps:
-      # 1. التثبيت الذكي (Official Script)
-      # بيحل كل مشاكل التثبيت السابقة
-      - name: Install Tools (Smart Way)
+      # 1. التثبيت اليدوي المضمون (بديل للرابط الخربان)
+      - name: Install Tools (Manual & Stable)
         run: |
-          sudo apt-get update && sudo apt-get install -y coreutils jq libpcap-dev
-          
-          # تثبيت الأدوات بالسكربت الرسمي لضمان آخر نسخة
-          curl -s https://projectdiscovery.io/install.sh | bash -s subfinder
-          curl -s https://projectdiscovery.io/install.sh | bash -s httpx
-          curl -s https://projectdiscovery.io/install.sh | bash -s nuclei
-          
-          # نقل الأدوات للمسار العام عشان تشتغل من أي مكان
-          # السكربت بينزلهم في .pdtm/go/bin عادة
-          sudo mv /home/runner/.pdtm/go/bin/* /usr/local/bin/ 2>/dev/null || true
-          
-          echo "Tools installed successfully!"
+          sudo apt-get update && sudo apt-get install -y coreutils jq unzip wget
+
+          # تثبيت Subfinder
+          wget -q https://github.com/projectdiscovery/subfinder/releases/download/v2.6.6/subfinder_2.6.6_linux_amd64.zip
+          unzip -q subfinder_2.6.6_linux_amd64.zip
+          sudo mv subfinder /usr/local/bin/
+
+          # تثبيت Httpx
+          wget -q https://github.com/projectdiscovery/httpx/releases/download/v1.6.9/httpx_1.6.9_linux_amd64.zip
+          unzip -q httpx_1.6.9_linux_amd64.zip
+          sudo mv httpx /usr/local/bin/
+
+          # تثبيت Nuclei
+          wget -q https://github.com/projectdiscovery/nuclei/releases/download/v3.3.6/nuclei_3.3.6_linux_amd64.zip
+          unzip -q nuclei_3.3.6_linux_amd64.zip
+          sudo mv nuclei /usr/local/bin/
+
+          # تنظيف
+          rm *.zip
+          echo "All tools installed successfully!"
 
       # 2. تحديد الهدف
       - name: Set Target
+        id: target
         run: |
           if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
-            echo "TARGET_DOMAIN=${{ github.event.inputs.DOMAIN }}" >> $GITHUB_ENV
+            TARGET="${{ github.event.inputs.DOMAIN }}"
           else
-            echo "TARGET_DOMAIN=testphp.vulnweb.com" >> $GITHUB_ENV
+            TARGET="example.com" # <--- غير ده لهدفك
           fi
+          echo "TARGET_DOMAIN=$TARGET" >> $GITHUB_ENV
 
       # 3. الاستطلاع (Subfinder)
       - name: Recon (Subfinder)
+        env:
+          GITHUB_TOKEN: ${{ secrets.GH_PAT }}
         run: |
-          # -silent: عشان الـ Logs تبقى نظيفة
           subfinder -d ${{ env.TARGET_DOMAIN }} -all -silent -o all_subs.txt
           echo "${{ env.TARGET_DOMAIN }}" >> all_subs.txt
 
-      # 4. الفلترة (Httpx)
-      - name: Filter (Httpx)
+      # 4. الفلترة (httpx)
+      - name: Filter (httpx)
         run: |
           httpx -l all_subs.txt -silent -o live_targets.txt
-          echo "Live Targets Found: $(wc -l < live_targets.txt)"
+          echo "Live targets count: $(wc -l < live_targets.txt)"
 
-      # 5. الهجوم الذكي (Nuclei JSON Mode)
-      - name: Scan (Nuclei)
+      # 5. الهجوم الذكي (Nuclei + DAST)
+      - name: Scan (Nuclei Smart Mode)
         run: |
-          # تحميل القوالب ضروري جداً
           nuclei -update-templates
-          
-          # -je: Json Export (عشان نعرف نقراها بـ jq)
-          # -s: Severity (Critical, High, Medium)
-          # شلت -dast عشان نضمن الاستقرار
           
           nuclei -l live_targets.txt \
             -s critical,high,medium \
-            -rl 50 -bs 5 -c 10 -timeout 10 \
+            -dast \
+            -rl 50 -bs 5 -c 10 \
+            -retries 2 \
             -je nuclei_results.json
 
-      # 6. التحليل والتبليغ (Smart Alerting)
-      - name: Alert (Telegram via JQ)
+      # 6. التحليل والتبليغ
+      - name: Alert (Telegram)
         env:
           TG_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
           TG_CHAT: ${{ secrets.TELEGRAM_CHAT_ID }}
         run: |
-          # نتأكد إن الملف موجود وفيه داتا
           if [ -s nuclei_results.json ]; then
-            echo "Vulnerabilities found! Processing..."
-            
-            # نقرأ ملف الـ JSON سطر سطر
             cat nuclei_results.json | while read line; do
-              # استخراج البيانات بدقة
+              
               NAME=$(echo $line | jq -r '.info.name')
               SEVERITY=$(echo $line | jq -r '.info.severity')
               URL=$(echo $line | jq -r '.matched-at')
               
-              # تجهيز الرسالة
-              MSG="🔥 **VULN FOUND!**
-              🎯 Target: ${{ env.TARGET_DOMAIN }}
-              🐛 Bug: $NAME
-              ⚠️ Severity: $SEVERITY
-              🔗 URL: \`$URL\`"
+              MSG="🔥 **VULNERABILITY FOUND!**
               
-              # الإرسال
+              **Target:** ${{ env.TARGET_DOMAIN }}
+              **Bug:** $NAME
+              **Severity:** $SEVERITY
+              **URL:** \`$URL\`"
+              
               curl -s -X POST "https://api.telegram.org/bot$TG_TOKEN/sendMessage" \
               -d chat_id="$TG_CHAT" \
               -d text="$MSG" \
@@ -104,5 +104,5 @@ jobs:
               sleep 1
             done
           else
-            echo "✅ Clean Scan. No critical/high bugs found."
+            echo "No vulnerabilities found. Job done silently."
           fi
