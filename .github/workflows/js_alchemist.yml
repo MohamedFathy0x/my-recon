@@ -1,0 +1,173 @@
+name: V15 - The Alchemist (Source Maps & Deep Analysis)
+
+on:
+  workflow_dispatch:
+    inputs:
+      URL:
+        description: 'Target URL (e.g., https://target.com)'
+        required: true
+
+jobs:
+  alchemy-job:
+    runs-on: ubuntu-latest
+    
+    steps:
+      # 1. تجهيز المختبر (Setup)
+      - name: Install Tools
+        run: |
+          sudo apt-get update && sudo apt-get install -y coreutils jq wget unzip python3-pip
+          
+          # أدوات الجمع الأساسية (Manual Install)
+          wget -q https://github.com/projectdiscovery/katana/releases/download/v1.1.0/katana_1.1.0_linux_amd64.zip
+          unzip -o -q katana_1.1.0_linux_amd64.zip
+          sudo mv katana /usr/local/bin/
+
+          wget -q https://github.com/projectdiscovery/httpx/releases/download/v1.6.0/httpx_1.6.0_linux_amd64.zip
+          unzip -o -q httpx_1.6.0_linux_amd64.zip
+          sudo mv httpx /usr/local/bin/
+
+          wget -q https://github.com/lc/gau/releases/download/v2.2.3/gau_2.2.3_linux_amd64.tar.gz
+          tar -xzf gau_2.2.3_linux_amd64.tar.gz
+          sudo mv gau /usr/local/bin/
+
+          # 🛠️ تثبيت SecretFinder (للأسرار)
+          git clone https://github.com/m4ll0k/SecretFinder.git secretfinder
+          cd secretfinder
+          pip3 install -r requirements.txt --break-system-packages
+          cd ..
+
+          # 🛠️ تثبيت LinkFinder (للروابط المعقدة) - الإضافة الجديدة
+          git clone https://github.com/GerbenJavado/LinkFinder.git linkfinder
+          cd linkfinder
+          pip3 install -r requirements.txt --break-system-packages
+          python3 setup.py install --break-system-packages
+          cd ..
+          
+          rm *.zip *.tar.gz
+
+      # 2. جمع المكونات (Harvesting)
+      - name: Harvest JS Files
+        run: |
+          echo "🧪 Collecting JS from ${{ github.event.inputs.URL }}..."
+          
+          # Live
+          katana -u ${{ github.event.inputs.URL }} -d 2 -jc -kf all -em js,json -o live_js.txt
+          # History
+          echo "${{ github.event.inputs.URL }}" | gau --subs | grep -E "\.js$" > history_js.txt
+          # Merge
+          cat live_js.txt history_js.txt | sort -u > candidates.txt
+          # Validate (200 OK only)
+          httpx -l candidates.txt -mc 200 -silent -o valid_js.txt
+          
+          echo "✅ Valid JS Files: $(wc -l < valid_js.txt)"
+
+      # 3. سحر الخرائط (Source Map Detection) 🗺️
+      # دي خطوة "ساحرة". بنجرب نزود .map في آخر كل ملف JS
+      # لو لقيناه، يبقى معانا الكود الأصلي!
+      - name: Check for Source Maps
+        run: |
+          echo "🧙‍♂️ Checking for Source Maps (.js.map)..."
+          touch source_maps_found.txt
+          
+          # بناخد عينة عشان الوقت، أو الكل لو تحب
+          head -n 50 valid_js.txt | while read url; do
+            map_url="${url}.map"
+            status=$(curl -o /dev/null -s -w "%{http_code}\n" "$map_url")
+            if [ "$status" == "200" ]; then
+              echo "$map_url" >> source_maps_found.txt
+            fi
+          done
+          
+          if [ -s source_maps_found.txt ]; then
+            echo "🎉 JACKPOT! Found Source Maps!"
+          fi
+
+      # 4. استخراج الأسرار (SecretFinder + Regex)
+      - name: Extract Secrets
+        run: |
+          echo "💎 Mining Secrets..."
+          touch secrets.txt
+          
+          # 1. Fast Regex (AWS, Google, Stripe, Slack)
+          grep -E "(AKIA|A3T)[0-9A-Z]{16}" valid_js.txt >> secrets.txt || true
+          grep -E "AIza[0-9A-Za-z-_]{35}" valid_js.txt >> secrets.txt || true
+          grep -E "xox[baprs]-([0-9a-zA-Z]{10,48})" valid_js.txt >> secrets.txt || true
+          
+          # 2. SecretFinder (Deep Analysis) - Limit to top 15 files for speed
+          head -n 15 valid_js.txt | while read url; do
+            python3 secretfinder/SecretFinder.py -i "$url" -o cli >> temp_secrets.txt || true
+          done
+          
+          cat temp_secrets.txt | grep "->" >> secrets.txt || true
+          sort -u secrets.txt > unique_secrets.txt
+
+      # 5. استخراج الروابط العميق (LinkFinder) 🔗
+      # LinkFinder أقوى بكتير من الـ grep لأنه بيفهم JS Syntax
+      - name: Deep Endpoint Analysis
+        run: |
+          echo "🗺️ Running LinkFinder..."
+          touch linkfinder_endpoints.txt
+          
+          # LinkFinder بياخد وقت، هنشغله على أهم الملفات (مثلاً ملفات app.js أو main.js)
+          # أو نشغله على أول 10 ملفات كعينة قوية
+          head -n 10 valid_js.txt | while read url; do
+            python3 linkfinder/linkfinder.py -i "$url" -o cli >> linkfinder_endpoints.txt || true
+          done
+          
+          # تنظيف النتائج
+          grep -E "^/" linkfinder_endpoints.txt | sort -u > clean_endpoints.txt
+          echo "Found $(wc -l < clean_endpoints.txt) deep endpoints."
+
+      # 6. التبليغ (Telegram)
+      - name: Wizard Alert
+        env:
+          TG_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
+          TG_CHAT: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: |
+          # 1. Source Maps (The Jackpot)
+          if [ -s source_maps_found.txt ]; then
+             MSG="🧙‍♂️ **SOURCE MAPS FOUND! (JACKPOT)**
+             Target: ${{ github.event.inputs.URL }}
+             
+             These files reveal the original source code:
+             $(head -n 5 source_maps_found.txt)"
+             
+             curl -s -X POST "https://api.telegram.org/bot$TG_TOKEN/sendMessage" \
+             -d chat_id="$TG_CHAT" -d text="$MSG" 
+          fi
+
+          # 2. Secrets
+          if [ -s unique_secrets.txt ]; then
+             MSG="💎 **SECRETS MINED!**
+             Target: ${{ github.event.inputs.URL }}
+             
+             $(head -n 10 unique_secrets.txt)"
+             
+             curl -s -X POST "https://api.telegram.org/bot$TG_TOKEN/sendMessage" \
+             -d chat_id="$TG_CHAT" -d text="$MSG" 
+          fi
+          
+          # 3. Endpoints
+          if [ -s clean_endpoints.txt ]; then
+             COUNT=$(wc -l < clean_endpoints.txt)
+             MSG="🗺️ **DEEP ENDPOINTS MAP**
+             Target: ${{ github.event.inputs.URL }}
+             Count: $COUNT
+             *(Clean list attached)*"
+             
+             curl -s -X POST "https://api.telegram.org/bot$TG_TOKEN/sendMessage" \
+             -d chat_id="$TG_CHAT" -d text="$MSG" -d parse_mode="Markdown"
+             
+             curl -s -X POST "https://api.telegram.org/bot$TG_TOKEN/sendDocument" \
+             -F chat_id="$TG_CHAT" -F document=@"clean_endpoints.txt"
+          fi
+
+      # 7. حفظ الكنز
+      - name: Upload Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: V15-Alchemy-Loot
+          path: |
+            unique_secrets.txt
+            clean_endpoints.txt
+            source_maps_found.txt
