@@ -1,4 +1,4 @@
-name: V16 - The Alchemist (Fixed & Stable)
+name: V16.1 - The Alchemist (Fixed Syntax)
 
 on:
   workflow_dispatch:
@@ -12,7 +12,7 @@ jobs:
     runs-on: ubuntu-latest
     
     steps:
-      # 1. التثبيت (نفس النسخة الشغالة)
+      # 1. التثبيت (نفسه)
       - name: Install Tools
         run: |
           sudo apt-get update && sudo apt-get install -y coreutils jq wget unzip python3-pip python3-setuptools
@@ -44,14 +44,14 @@ jobs:
           
           rm *.zip *.tar.gz
 
-      # 2. الجمع (مع تحسينات لتفادي الحظر)
+      # 2. الجمع
       - name: Harvest JS Files
         run: |
           echo "🧪 Collecting JS from ${{ github.event.inputs.URL }}..."
           mkdir -p /home/runner/
           touch /home/runner/.gau.toml
 
-          # Live (بطئ شوية لتفادي الحظر)
+          # Live
           katana -u ${{ github.event.inputs.URL }} -d 2 -jc -kf all -em js,json -c 5 -o live_js.txt || true
           
           # History
@@ -60,50 +60,55 @@ jobs:
           # Merge
           cat live_js.txt history_js.txt | sort -u > candidates.txt
           
-          # Validate (Random Agent لتفادي WAF)
+          # Validate
           httpx -l candidates.txt -mc 200 -silent -H "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64)" -o valid_js.txt
           
           echo "✅ Valid JS Files: $(wc -l < valid_js.txt)"
 
-      # 3. Source Maps
+      # 3. Source Maps (تم إصلاح الشرط)
       - name: Check for Source Maps
-        if: hash valid_js.txt
         run: |
-          echo "🧙‍♂️ Checking for Source Maps..."
-          touch source_maps_found.txt
-          head -n 30 valid_js.txt | while read url; do
-            status=$(curl -o /dev/null -s -w "%{http_code}\n" "${url}.map")
-            if [ "$status" == "200" ]; then echo "${url}.map" >> source_maps_found.txt; fi
-          done
+          if [ -s valid_js.txt ]; then
+            echo "🧙‍♂️ Checking for Source Maps..."
+            touch source_maps_found.txt
+            head -n 30 valid_js.txt | while read url; do
+              status=$(curl -o /dev/null -s -w "%{http_code}\n" "${url}.map")
+              if [ "$status" == "200" ]; then echo "${url}.map" >> source_maps_found.txt; fi
+            done
+          else
+            echo "Skipping: No valid JS files."
+          fi
 
-      # 4. Secrets (Fixed Regex)
+      # 4. Secrets (تم إصلاح الشرط)
       - name: Extract Secrets
-        if: hash valid_js.txt
         run: |
-          echo "💎 Mining Secrets..."
-          touch secrets.txt
-          
-          # تصحيح الـ Regex (إزالة الـ range الخاطئ)
-          grep -E "AKIA[0-9A-Z]{16}" valid_js.txt >> secrets.txt || true
-          grep -E "AIza[0-9A-Za-z\-_]{35}" valid_js.txt >> secrets.txt || true
-          
-          # SecretFinder
-          head -n 10 valid_js.txt | while read url; do
-            python3 secretfinder/SecretFinder.py -i "$url" -o cli >> temp_secrets.txt || true
-          done
-          cat temp_secrets.txt | grep "->" >> secrets.txt || true
-          sort -u secrets.txt > unique_secrets.txt
+          if [ -s valid_js.txt ]; then
+            echo "💎 Mining Secrets..."
+            touch secrets.txt
+            
+            # Regex
+            grep -E "AKIA[0-9A-Z]{16}" valid_js.txt >> secrets.txt || true
+            grep -E "AIza[0-9A-Za-z\-_]{35}" valid_js.txt >> secrets.txt || true
+            
+            # SecretFinder
+            head -n 10 valid_js.txt | while read url; do
+              python3 secretfinder/SecretFinder.py -i "$url" -o cli >> temp_secrets.txt || true
+            done
+            cat temp_secrets.txt | grep "->" >> secrets.txt || true
+            sort -u secrets.txt > unique_secrets.txt
+          fi
 
-      # 5. Endpoints
+      # 5. Endpoints (تم إصلاح الشرط)
       - name: Deep Endpoint Analysis
-        if: hash valid_js.txt
         run: |
-          echo "🗺️ Running LinkFinder..."
-          touch clean_endpoints.txt
-          head -n 10 valid_js.txt | while read url; do
-            python3 linkfinder/linkfinder.py -i "$url" -o cli >> raw_links.txt || true
-          done
-          grep -E "^/" raw_links.txt | sort -u > clean_endpoints.txt
+          if [ -s valid_js.txt ]; then
+            echo "🗺️ Running LinkFinder..."
+            touch clean_endpoints.txt
+            head -n 10 valid_js.txt | while read url; do
+              python3 linkfinder/linkfinder.py -i "$url" -o cli >> raw_links.txt || true
+            done
+            grep -E "^/" raw_links.txt | sort -u > clean_endpoints.txt
+          fi
 
       # 6. التبليغ
       - name: Wizard Alert
