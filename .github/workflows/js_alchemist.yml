@@ -46,21 +46,28 @@ jobs:
           
           rm *.zip *.tar.gz
 
-      # 2. جمع المكونات (Harvesting)
+      # 2. جمع المكونات (Harvesting - Fixed GAU)
       - name: Harvest JS Files
         run: |
           echo "🧪 Collecting JS from ${{ github.event.inputs.URL }}..."
           
+          # حل مشكلة GAU config
+          touch ~/.gau.toml
+
           # Live
           katana -u ${{ github.event.inputs.URL }} -d 2 -jc -kf all -em js,json -o live_js.txt
-          # History
+          
+          # History (دلوقتي هتشتغل تمام)
           echo "${{ github.event.inputs.URL }}" | gau --subs | grep -E "\.js$" > history_js.txt
+          
           # Merge
           cat live_js.txt history_js.txt | sort -u > candidates.txt
+          
           # Validate (200 OK only)
           httpx -l candidates.txt -mc 200 -silent -o valid_js.txt
           
           echo "✅ Valid JS Files: $(wc -l < valid_js.txt)"
+
 
       # 3. سحر الخرائط (Source Map Detection) 🗺️
       # دي خطوة "ساحرة". بنجرب نزود .map في آخر كل ملف JS
