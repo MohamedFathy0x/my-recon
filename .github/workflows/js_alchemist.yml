@@ -46,19 +46,22 @@ jobs:
           
           rm *.zip *.tar.gz
 
-      # 2. جمع المكونات (Harvesting - Fixed GAU)
+            # 2. جمع المكونات (Harvesting - Fixed GAU Config)
       - name: Harvest JS Files
         run: |
           echo "🧪 Collecting JS from ${{ github.event.inputs.URL }}..."
           
-          # حل مشكلة GAU config
-          touch ~/.gau.toml
-
+          # حل نهائي لمشكلة GAU config
+          # بنعمل الملف في المسار الافتراضي للمستخدم
+          mkdir -p /home/runner/
+          touch /home/runner/.gau.toml
+          
           # Live
           katana -u ${{ github.event.inputs.URL }} -d 2 -jc -kf all -em js,json -o live_js.txt
           
-          # History (دلوقتي هتشتغل تمام)
-          echo "${{ github.event.inputs.URL }}" | gau --subs | grep -E "\.js$" > history_js.txt
+          # History (مع تجاهل الأخطاء لو حصلت عشان الورك فلو يكمل)
+          echo "Running GAU..."
+          echo "${{ github.event.inputs.URL }}" | gau --subs --providers wayback,commoncrawl,alienvault | grep -E "\.js$" > history_js.txt || true
           
           # Merge
           cat live_js.txt history_js.txt | sort -u > candidates.txt
