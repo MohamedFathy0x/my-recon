@@ -17,25 +17,29 @@ jobs:
       contents: write
       
     steps:
-      # 1. التثبيت اليدوي
-      - name: Install Tools
+            # --- الخطوة 1: التثبيت اليدوي المضمون (مع تصليح unZIP) ---
+      - name: Install Tools (Manual & Stable)
         run: |
           sudo apt-get update && sudo apt-get install -y coreutils jq wget unzip
           
-          # تثبيت الأدوات
+          # تثبيت Subfinder (مهم: إضافة -o للتجاوز)
           wget -q https://github.com/projectdiscovery/subfinder/releases/download/v2.6.6/subfinder_2.6.6_linux_amd64.zip
-          unzip -q subfinder_2.6.6_linux_amd64.zip
+          unzip -o -q subfinder_2.6.6_linux_amd64.zip
           sudo mv subfinder /usr/local/bin/
-          
+
+          # تثبيت Httpx (مهم: إضافة -o للتجاوز)
           wget -q https://github.com/projectdiscovery/httpx/releases/download/v1.6.9/httpx_1.6.9_linux_amd64.zip
-          unzip -q httpx_1.6.9_linux_amd64.zip
+          unzip -o -q httpx_1.6.9_linux_amd64.zip
           sudo mv httpx /usr/local/bin/
-          
+
+          # تثبيت Nuclei (مهم: إضافة -o للتجاوز)
           wget -q https://github.com/projectdiscovery/nuclei/releases/download/v3.3.6/nuclei_3.3.6_linux_amd64.zip
-          unzip -q nuclei_3.3.6_linux_amd64.zip
+          unzip -o -q nuclei_3.3.6_linux_amd64.zip
           sudo mv nuclei /usr/local/bin/
-          
+
           rm *.zip
+          echo "All tools installed successfully!"
+
 
       # 2. استرجاع الذاكرة
       - name: Checkout Memory
