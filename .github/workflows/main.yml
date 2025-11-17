@@ -1,4 +1,4 @@
-name: V8 - Optimized Sniper Hunter (Fast, Stealth, No Bloat)
+name: V10 - The Masterpiece (Stable & Smart)
 
 on:
   schedule:
@@ -15,169 +15,94 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
-      
+    
     steps:
-      # 1. التثبيت السريع (Direct Binary Download - Fixed)
-      - name: Install Tools (Manual & Fast)
+      # 1. التثبيت الذكي (Official Script)
+      # بيحل كل مشاكل التثبيت السابقة
+      - name: Install Tools (Smart Way)
         run: |
-          # Install Subfinder
-          wget -q https://github.com/projectdiscovery/subfinder/releases/download/v2.6.6/subfinder_2.6.6_linux_amd64.zip
-          unzip -o -q subfinder_2.6.6_linux_amd64.zip  # ضفنا -o هنا
-          sudo mv subfinder /usr/local/bin/
-
-          # Install Httpx
-          wget -q https://github.com/projectdiscovery/httpx/releases/download/v1.6.0/httpx_1.6.0_linux_amd64.zip
-          unzip -o -q httpx_1.6.0_linux_amd64.zip      # وضفنا -o هنا
-          sudo mv httpx /usr/local/bin/
-
-          # Install Nuclei
-          wget -q https://github.com/projectdiscovery/nuclei/releases/download/v3.2.9/nuclei_3.2.9_linux_amd64.zip
-          unzip -o -q nuclei_3.2.9_linux_amd64.zip     # وضفنا -o هنا
-          sudo mv nuclei /usr/local/bin/
+          sudo apt-get update && sudo apt-get install -y coreutils jq libpcap-dev
           
-          # Clean up
-          rm *.zip
+          # تثبيت الأدوات بالسكربت الرسمي لضمان آخر نسخة
+          curl -s https://projectdiscovery.io/install.sh | bash -s subfinder
+          curl -s https://projectdiscovery.io/install.sh | bash -s httpx
+          curl -s https://projectdiscovery.io/install.sh | bash -s nuclei
+          
+          # نقل الأدوات للمسار العام عشان تشتغل من أي مكان
+          # السكربت بينزلهم في .pdtm/go/bin عادة
+          sudo mv /home/runner/.pdtm/go/bin/* /usr/local/bin/ 2>/dev/null || true
+          
           echo "Tools installed successfully!"
 
-      # 2. تثبيت أداة الذاكرة فقط
-      - name: Install Coreutils
-        run: sudo apt-get update && sudo apt-get install -y coreutils
-
-      # 3. استرجاع الذاكرة
-      - name: Checkout Memory
-        uses: actions/checkout@v4
-
-      # 4. تحديد الهدف (المنطق السليم)
+      # 2. تحديد الهدف
       - name: Set Target
-        id: target
         run: |
           if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
-            TARGET_NAME="${{ github.event.inputs.DOMAIN }}"
+            echo "TARGET_DOMAIN=${{ github.event.inputs.DOMAIN }}" >> $GITHUB_ENV
           else
-            TARGET_NAME="example.com" # هدفك الأوتوماتيك (غيره هنا)
+            echo "TARGET_DOMAIN=testphp.vulnweb.com" >> $GITHUB_ENV
           fi
-          echo "TARGET=$TARGET_NAME" >> $GITHUB_OUTPUT
-          echo "TARGET_DOMAIN=$TARGET_NAME" >> $GITHUB_ENV
 
-      # 5. البحث (Subfinder)
-      - name: Run Subfinder
+      # 3. الاستطلاع (Subfinder)
+      - name: Recon (Subfinder)
+        run: |
+          # -silent: عشان الـ Logs تبقى نظيفة
+          subfinder -d ${{ env.TARGET_DOMAIN }} -all -silent -o all_subs.txt
+          echo "${{ env.TARGET_DOMAIN }}" >> all_subs.txt
+
+      # 4. الفلترة (Httpx)
+      - name: Filter (Httpx)
+        run: |
+          httpx -l all_subs.txt -silent -o live_targets.txt
+          echo "Live Targets Found: $(wc -l < live_targets.txt)"
+
+      # 5. الهجوم الذكي (Nuclei JSON Mode)
+      - name: Scan (Nuclei)
+        run: |
+          # تحميل القوالب ضروري جداً
+          nuclei -update-templates
+          
+          # -je: Json Export (عشان نعرف نقراها بـ jq)
+          # -s: Severity (Critical, High, Medium)
+          # شلت -dast عشان نضمن الاستقرار
+          
+          nuclei -l live_targets.txt \
+            -s critical,high,medium \
+            -rl 50 -bs 5 -c 10 -timeout 10 \
+            -je nuclei_results.json
+
+      # 6. التحليل والتبليغ (Smart Alerting)
+      - name: Alert (Telegram via JQ)
         env:
-          GITHUB_TOKEN: ${{ secrets.GH_PAT }}
-          CHAOS_KEY: ${{ secrets.CHAOS_KEY }}
-          SHODAN_API_KEY: ${{ secrets.SHODAN_API_KEY }}
-          SECURITYTRAILS_TOKEN: ${{ secrets.SECURITYTRAILS_TOKEN }}
+          TG_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
+          TG_CHAT: ${{ secrets.TELEGRAM_CHAT_ID }}
         run: |
-          subfinder -d ${{ env.TARGET_DOMAIN }} -all -o all_subdomains.txt
-          # إضافة النطاق الأصلي للفحص
-          echo "${{ env.TARGET_DOMAIN }}" >> all_subdomains.txt
-
-      # 6. فلترة الأحياء (httpx)
-      - name: Filter Live Hosts
-        run: |
-          httpx -l all_subdomains.txt -o live_subdomains.txt
-          echo "Live targets: $(wc -l < live_subdomains.txt)"
-
-      # 7. منطق الذاكرة (الجديد vs القديم)
-      - name: Diff & Memory Logic
-        id: diff
-        run: |
-          touch previous_live_subdomains.txt
-          sort live_subdomains.txt > current_live.txt
-          sort previous_live_subdomains.txt > previous_live.txt
-          
-          # الجديد
-          comm -23 current_live.txt previous_live.txt > new_targets.txt
-          # القديم
-          comm -12 current_live.txt previous_live.txt > old_targets.txt
-          
-          echo "NEW_COUNT=$(wc -l < new_targets.txt)" >> $GITHUB_ENV
-          echo "OLD_COUNT=$(wc -l < old_targets.txt)" >> $GITHUB_ENV
-
-      # 8. تبليغ عن أهداف جديدة فوراً
-      - name: Notify New Targets
-        if: env.NEW_COUNT > 0
-        run: |
-          TOP_TARGETS=$(head -n 10 new_targets.txt)
-          MSG="🎯 **NEW TARGETS FOUND!**
-          Target: ${{ env.TARGET_DOMAIN }}
-          Count: ${{ env.NEW_COUNT }}
-          \`\`\`
-          $TOP_TARGETS
-          \`\`\`
-          *(Go hunt manually!)*"
-          curl -s -X POST "https://api.telegram.org/bot${{ secrets.TELEGRAM_TOKEN }}/sendMessage" \
-            -d chat_id="${{ secrets.TELEGRAM_CHAT_ID }}" \
-            -d text="$MSG" -d parse_mode="Markdown"
-
-      # 9. فحص الجديد (Nuclei Stealth Mode)
-      - name: Nuclei Scan (NEW Targets)
-        if: env.NEW_COUNT > 0
-        run: |
-          # إعدادات التخفي والسرعة (-rl 50 -bs 5)
-          nuclei -l new_targets.txt -s critical,high,medium -rl 50 -bs 5 -c 10 -o nuclei_new.txt
-
-      # 10. فحص القديم (Light Stealth Mode)
-      - name: Nuclei Scan (OLD Targets)
-        if: env.OLD_COUNT > 0
-        run: |
-          # فحص خفيف للقديم
-          nuclei -l old_targets.txt -tags takeover,exposure,misconfig -s high,critical -rl 50 -bs 5 -c 10 -o nuclei_old.txt
-
-      # 11. تجميع النتائج
-      - name: Combine Results
-        run: |
-          touch nuclei_new.txt nuclei_old.txt
-          cat nuclei_new.txt nuclei_old.txt > final_results.txt
-          echo "VULNS_FOUND=$(wc -l < final_results.txt)" >> $GITHUB_ENV
-
-      # 12. الإرسال الفوري للثغرات
-      - name: Send Alerts
-        if: env.VULNS_FOUND > 0
-        run: |
-          while IFS= read -r vuln; do
-            MSG="🚨 **VULNERABILITY ALERT**
-            Target: ${{ env.TARGET_DOMAIN }}
-            \`\`\`
-            $vuln
-            \`\`\`"
-            curl -s -X POST "https://api.telegram.org/bot${{ secrets.TELEGRAM_TOKEN }}/sendMessage" \
-            -d chat_id="${{ secrets.TELEGRAM_CHAT_ID }}" \
-            -d text="$MSG" -d parse_mode="Markdown"
-            sleep 1
-          done < final_results.txt
-
-      # 13. تقرير الملخص
-      - name: Send Summary
-        run: |
-          if [ ${{ env.VULNS_FOUND }} -gt 0 ]; then
-            SUMMARY="✅ **Scan Complete**\nTarget: ${{ env.TARGET_DOMAIN }}\n🚨 Found: ${{ env.VULNS_FOUND }} vulns"
+          # نتأكد إن الملف موجود وفيه داتا
+          if [ -s nuclei_results.json ]; then
+            echo "Vulnerabilities found! Processing..."
+            
+            # نقرأ ملف الـ JSON سطر سطر
+            cat nuclei_results.json | while read line; do
+              # استخراج البيانات بدقة
+              NAME=$(echo $line | jq -r '.info.name')
+              SEVERITY=$(echo $line | jq -r '.info.severity')
+              URL=$(echo $line | jq -r '.matched-at')
+              
+              # تجهيز الرسالة
+              MSG="🔥 **VULN FOUND!**
+              🎯 Target: ${{ env.TARGET_DOMAIN }}
+              🐛 Bug: $NAME
+              ⚠️ Severity: $SEVERITY
+              🔗 URL: \`$URL\`"
+              
+              # الإرسال
+              curl -s -X POST "https://api.telegram.org/bot$TG_TOKEN/sendMessage" \
+              -d chat_id="$TG_CHAT" \
+              -d text="$MSG" \
+              -d parse_mode="Markdown"
+              
+              sleep 1
+            done
           else
-            SUMMARY="✅ **Scan Complete**\nTarget: ${{ env.TARGET_DOMAIN }}\nNew Targets: ${{ env.NEW_TARGETS_COUNT }}\nNo new vulns."
-          fi
-          
-          # يرسل الملخص فقط لو فيه جديد أو ثغرات لتقليل الدوشة
-          if [ ${{ env.NEW_TARGETS_COUNT }} -gt 0 ] || [ ${{ env.VULNS_FOUND }} -gt 0 ]; then
-             curl -s -X POST "https://api.telegram.org/bot${{ secrets.TELEGRAM_TOKEN }}/sendMessage" \
-             -d chat_id="${{ secrets.TELEGRAM_CHAT_ID }}" \
-             -d text="$SUMMARY"
-          fi
-
-      # 14. حفظ الذاكرة (مع الحماية Rebase)
-      - name: Save Memory
-        run: |
-          rm -f previous_live_subdomains.txt
-          mv current_live.txt previous_live_subdomains.txt
-          
-          git config --global user.name "bot"
-          git config --global user.email "bot@noreply.com"
-          
-          # سحب التغييرات أولاً لتجنب التضارب
-          git pull origin main --rebase || echo "No changes"
-          
-          git add previous_live_subdomains.txt
-          if git diff --staged --quiet; then
-            echo "No changes to commit."
-          else
-            git commit -m "Update memory"
-            git push
+            echo "✅ Clean Scan. No critical/high bugs found."
           fi
