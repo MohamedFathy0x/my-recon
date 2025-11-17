@@ -1,4 +1,4 @@
-name: V16.1 - The Alchemist (Fixed Syntax)
+name: V17 - The Alchemist (Bug Free Edition)
 
 on:
   workflow_dispatch:
@@ -60,12 +60,12 @@ jobs:
           # Merge
           cat live_js.txt history_js.txt | sort -u > candidates.txt
           
-          # Validate
+          # Validate (User-Agent مهم لتفادي الحظر)
           httpx -l candidates.txt -mc 200 -silent -H "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64)" -o valid_js.txt
           
           echo "✅ Valid JS Files: $(wc -l < valid_js.txt)"
 
-      # 3. Source Maps (تم إصلاح الشرط)
+      # 3. Source Maps
       - name: Check for Source Maps
         run: |
           if [ -s valid_js.txt ]; then
@@ -75,30 +75,31 @@ jobs:
               status=$(curl -o /dev/null -s -w "%{http_code}\n" "${url}.map")
               if [ "$status" == "200" ]; then echo "${url}.map" >> source_maps_found.txt; fi
             done
-          else
-            echo "Skipping: No valid JS files."
           fi
 
-      # 4. Secrets (تم إصلاح الشرط)
+      # 4. Secrets (تصليح مشكلة GREP)
       - name: Extract Secrets
         run: |
           if [ -s valid_js.txt ]; then
             echo "💎 Mining Secrets..."
             touch secrets.txt
             
-            # Regex
+            # Regex بسيط
             grep -E "AKIA[0-9A-Z]{16}" valid_js.txt >> secrets.txt || true
-            grep -E "AIza[0-9A-Za-z\-_]{35}" valid_js.txt >> secrets.txt || true
+            grep -E "AIza[0-9A-Za-z_-]{35}" valid_js.txt >> secrets.txt || true
             
-            # SecretFinder
+            # SecretFinder (التصليح هنا: إضافة -- قبل السهم)
             head -n 10 valid_js.txt | while read url; do
               python3 secretfinder/SecretFinder.py -i "$url" -o cli >> temp_secrets.txt || true
             done
-            cat temp_secrets.txt | grep "->" >> secrets.txt || true
+            
+            # الحل لمشكلة invalid option
+            cat temp_secrets.txt | grep -- "->" >> secrets.txt || true
+            
             sort -u secrets.txt > unique_secrets.txt
           fi
 
-      # 5. Endpoints (تم إصلاح الشرط)
+      # 5. Endpoints
       - name: Deep Endpoint Analysis
         run: |
           if [ -s valid_js.txt ]; then
@@ -135,13 +136,22 @@ jobs:
              curl -s -X POST "https://api.telegram.org/bot$TG_TOKEN/sendMessage" -d chat_id="$TG_CHAT" -d text="$MSG" -d parse_mode="Markdown"
              curl -s -X POST "https://api.telegram.org/bot$TG_TOKEN/sendDocument" -F chat_id="$TG_CHAT" -F document=@"clean_endpoints.txt"
           fi
+          
+          # Source Maps Alert
+          if [ -s source_maps_found.txt ]; then
+             MSG="🧙‍♂️ **SOURCE MAPS FOUND!**
+             Target: ${{ github.event.inputs.URL }}
+             $(head -n 5 source_maps_found.txt)"
+             curl -s -X POST "https://api.telegram.org/bot$TG_TOKEN/sendMessage" -d chat_id="$TG_CHAT" -d text="$MSG"
+          fi
 
       # 7. Artifacts
       - name: Upload Artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: V16-Loot
+          name: V17-Loot
           path: |
             valid_js.txt
             unique_secrets.txt
             clean_endpoints.txt
+            source_maps_found.txt
