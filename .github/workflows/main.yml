@@ -1,100 +1,126 @@
-name: V9.2 - Smart Hunter (Stable & Fixed)
+name: V11 - Apex Predator (Memory, Deep Scan, Vuln Only)
 
 on:
   schedule:
-    - cron: '0 */12 * * *'
+    - cron: '0 */12 * * *' # كل 12 ساعة
   workflow_dispatch:
     inputs:
       DOMAIN:
         description: 'Target Domain'
         required: true
-        default: 'testphp.vulnweb.com'
+        default: 'ginandjuice.shop' # هدف تجريبي ممتاز
 
 jobs:
   hunt-job:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write # ضروري عشان يحفظ الذاكرة
     
     steps:
-      # 1. التثبيت اليدوي المضمون (بديل للرابط الخربان)
-      - name: Install Tools (Manual & Stable)
+      # 1. التثبيت الرسمي والسريع (الأضمن)
+      - name: Install Tools (Smart Mode)
         run: |
-          sudo apt-get update && sudo apt-get install -y coreutils jq unzip wget
+          sudo apt-get update && sudo apt-get install -y coreutils jq libpcap-dev
+          
+          # تثبيت الأدوات من المصدر الرسمي
+          curl -s https://projectdiscovery.io/install.sh | bash -s subfinder
+          curl -s https://projectdiscovery.io/install.sh | bash -s httpx
+          curl -s https://projectdiscovery.io/install.sh | bash -s nuclei
+          
+          # نقلهم للمسار العام
+          sudo mv /home/runner/.pdtm/go/bin/* /usr/local/bin/ 2>/dev/null || true
+          
+          # تحديث قوالب الثغرات (أهم خطوة)
+          nuclei -update-templates
 
-          # تثبيت Subfinder
-          wget -q https://github.com/projectdiscovery/subfinder/releases/download/v2.6.6/subfinder_2.6.6_linux_amd64.zip
-          unzip -q subfinder_2.6.6_linux_amd64.zip
-          sudo mv subfinder /usr/local/bin/
+      # 2. سحب الذاكرة من المخزن
+      - name: Checkout Memory
+        uses: actions/checkout@v4
 
-          # تثبيت Httpx
-          wget -q https://github.com/projectdiscovery/httpx/releases/download/v1.6.9/httpx_1.6.9_linux_amd64.zip
-          unzip -q httpx_1.6.9_linux_amd64.zip
-          sudo mv httpx /usr/local/bin/
-
-          # تثبيت Nuclei
-          wget -q https://github.com/projectdiscovery/nuclei/releases/download/v3.3.6/nuclei_3.3.6_linux_amd64.zip
-          unzip -q nuclei_3.3.6_linux_amd64.zip
-          sudo mv nuclei /usr/local/bin/
-
-          # تنظيف
-          rm *.zip
-          echo "All tools installed successfully!"
-
-      # 2. تحديد الهدف
+      # 3. تحديد الهدف
       - name: Set Target
-        id: target
         run: |
           if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
-            TARGET="${{ github.event.inputs.DOMAIN }}"
+            echo "TARGET_DOMAIN=${{ github.event.inputs.DOMAIN }}" >> $GITHUB_ENV
           else
-            TARGET="example.com" # <--- غير ده لهدفك
+            echo "TARGET_DOMAIN=example.com" >> $GITHUB_ENV
           fi
-          echo "TARGET_DOMAIN=$TARGET" >> $GITHUB_ENV
 
-      # 3. الاستطلاع (Subfinder)
+      # 4. الاستطلاع (Subfinder)
       - name: Recon (Subfinder)
-        env:
-          GITHUB_TOKEN: ${{ secrets.GH_PAT }}
         run: |
           subfinder -d ${{ env.TARGET_DOMAIN }} -all -silent -o all_subs.txt
+          # إضافة الدومين الأصلي عشان يتفحص هو كمان
           echo "${{ env.TARGET_DOMAIN }}" >> all_subs.txt
 
-      # 4. الفلترة (httpx)
-      - name: Filter (httpx)
+      # 5. فلترة الأحياء (Httpx)
+      - name: Filter (Httpx)
         run: |
           httpx -l all_subs.txt -silent -o live_targets.txt
-          echo "Live targets count: $(wc -l < live_targets.txt)"
 
-      # 5. الهجوم الذكي (Nuclei + DAST)
-      - name: Scan (Nuclei Smart Mode)
+      # 6. منطق الذاكرة (العبقرية هنا) 🧠
+      # بيقارن بين اللي لقاهم النهاردة (live_targets) واللي في الذاكرة (previous_memory)
+      - name: Diff Logic (New vs Old)
         run: |
-          nuclei -update-templates
+          touch previous_memory.txt
+          sort live_targets.txt > current_sorted.txt
+          sort previous_memory.txt > previous_sorted.txt
           
-          nuclei -l live_targets.txt \
-            -s critical,high,medium \
-            -dast \
-            -rl 50 -bs 5 -c 10 \
-            -retries 2 \
-            -je nuclei_results.json
+          # استخراج الجديد (الموجود في الحالي ومش في القديم)
+          comm -23 current_sorted.txt previous_sorted.txt > new_targets.txt
+          
+          # استخراج القديم
+          comm -12 current_sorted.txt previous_sorted.txt > old_targets.txt
+          
+          echo "NEW_COUNT=$(wc -l < new_targets.txt)" >> $GITHUB_ENV
+          echo "OLD_COUNT=$(wc -l < old_targets.txt)" >> $GITHUB_ENV
 
-      # 6. التحليل والتبليغ
-      - name: Alert (Telegram)
+      # 7. الهجوم على الجديد (Deep Scan) ⚔️
+      # بنضرب الجديد بكل قوتنا (Critical, High, Medium)
+      - name: Scan NEW Targets (Heavy)
+        if: env.NEW_COUNT > 0
+        run: |
+          nuclei -l new_targets.txt \
+            -s critical,high,medium \
+            -rl 50 -bs 5 -c 10 -timeout 8 \
+            -je nuclei_new.json
+
+      # 8. الهجوم على القديم (Light Scan) 🛡️
+      # بنضرب القديم ضربة خفيفة (Takeovers & CVEs) عشان لو حاجة جدت
+      - name: Scan OLD Targets (Light)
+        if: env.OLD_COUNT > 0
+        run: |
+          nuclei -l old_targets.txt \
+            -tags takeover,cve \
+            -s critical,high \
+            -rl 50 \
+            -je nuclei_old.json
+
+      # 9. تجميع النتائج والتبليغ (VULNS ONLY) 🚨
+      # هنا بنفلتر النتايج ونبعتلك بس لو فيه مصيبة
+      - name: Alert (Telegram via JQ)
         env:
           TG_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
           TG_CHAT: ${{ secrets.TELEGRAM_CHAT_ID }}
         run: |
-          if [ -s nuclei_results.json ]; then
-            cat nuclei_results.json | while read line; do
-              
+          # دمج ملفات النتايج (لو موجودة)
+          touch nuclei_new.json nuclei_old.json
+          cat nuclei_new.json nuclei_old.json > all_results.json
+          
+          if [ -s all_results.json ]; then
+            echo "Found bugs, sending alerts..."
+            
+            cat all_results.json | while read line; do
               NAME=$(echo $line | jq -r '.info.name')
               SEVERITY=$(echo $line | jq -r '.info.severity')
               URL=$(echo $line | jq -r '.matched-at')
               
-              MSG="🔥 **VULNERABILITY FOUND!**
+              MSG="🚨 **VULNERABILITY DETECTED!**
               
-              **Target:** ${{ env.TARGET_DOMAIN }}
-              **Bug:** $NAME
-              **Severity:** $SEVERITY
-              **URL:** \`$URL\`"
+              🎯 **Target:** ${{ env.TARGET_DOMAIN }}
+              🐛 **Bug:** $NAME
+              ⚠️ **Severity:** $SEVERITY
+              🔗 **URL:** \`$URL\`"
               
               curl -s -X POST "https://api.telegram.org/bot$TG_TOKEN/sendMessage" \
               -d chat_id="$TG_CHAT" \
@@ -104,5 +130,28 @@ jobs:
               sleep 1
             done
           else
-            echo "No vulnerabilities found. Job done silently."
+            echo "Clean Scan. No vulnerabilities found."
+          fi
+
+      # 10. تحديث الذاكرة (Brain Sync) 💾
+      - name: Save Memory (Rebase & Push)
+        run: |
+          # تجهيز الجيت
+          git config --global user.name "hunter-bot"
+          git config --global user.email "bot@noreply.com"
+          
+          # سحب التحديثات أولاً لتجنب المشاكل
+          git pull origin main --rebase || echo "Rebase skipped"
+          
+          # تحديث ملف الذاكرة
+          rm -f previous_memory.txt
+          mv current_sorted.txt previous_memory.txt
+          
+          # الحفظ والرفع
+          git add previous_memory.txt
+          if git diff --staged --quiet; then
+            echo "No changes to memory."
+          else
+            git commit -m "Update Recon Memory for ${{ env.TARGET_DOMAIN }}"
+            git push
           fi
