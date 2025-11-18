@@ -58,8 +58,9 @@ jobs:
           # إضافة الدومين الأصلي
           echo "${{ env.TARGET }}" >> all_subs.txt
           
-          # فلترة الأحياء (هنا نحط الهيدر الإجباري لـ HackerOne)
-          httpx -l all_subs.txt -mc 200 -silent \
+          # التعديل: شلنا -mc 200 عشان يقبل أي حاجة (حتى لو 403 Forbidden)
+          # ده هيخلي الدومين الأساسي يظهر حتى لو عليه حماية
+          httpx -l all_subs.txt -silent \
             -H "X-HackerOne-Research: mohamedfathy0x" \
             -H "User-Agent: Mozilla/5.0 (Security-Research)" \
             -rl 10 \
