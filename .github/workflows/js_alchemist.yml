@@ -1,150 +1,158 @@
-name: V18 - The Talkative Alchemist (Guaranteed Report)
+name: V22.2 - Northern.tech Hunter (Final & Verified)
 
 on:
-  workflow_dispatch:
-    inputs:
-      URL:
-        description: 'Target URL (e.g., https://donorbox.org)'
-        required: true
+  schedule:
+    - cron: '0 */12 * * *' # يشتغل كل 12 ساعة
+  workflow_dispatch:       # تشغيل يدوي
 
 jobs:
-  alchemy-job:
+  hunter-job:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write # عشان يحفظ الذاكرة
     
     steps:
-      # 1. التثبيت
+      # 1. التثبيت المضمون (مع النقل الصحيح لمسار النظام)
       - name: Install Tools
         run: |
-          sudo apt-get update && sudo apt-get install -y coreutils jq wget unzip python3-pip python3-setuptools
+          sudo apt-get update && sudo apt-get install -y coreutils jq wget unzip libpcap-dev
           
-          # Tools
-          wget -q https://github.com/projectdiscovery/katana/releases/download/v1.1.0/katana_1.1.0_linux_amd64.zip
-          unzip -o -q katana_1.1.0_linux_amd64.zip
-          sudo mv katana /usr/local/bin/
+          # Subfinder
+          wget -q https://github.com/projectdiscovery/subfinder/releases/download/v2.6.6/subfinder_2.6.6_linux_amd64.zip
+          unzip -o -q subfinder_2.6.6_linux_amd64.zip
+          sudo mv subfinder /usr/local/bin/
 
+          # Httpx
           wget -q https://github.com/projectdiscovery/httpx/releases/download/v1.6.0/httpx_1.6.0_linux_amd64.zip
           unzip -o -q httpx_1.6.0_linux_amd64.zip
           sudo mv httpx /usr/local/bin/
 
-          wget -q https://github.com/lc/gau/releases/download/v2.2.3/gau_2.2.3_linux_amd64.tar.gz
-          tar -xzf gau_2.2.3_linux_amd64.tar.gz
-          sudo mv gau /usr/local/bin/
-
-          # Python Tools
-          git clone https://github.com/m4ll0k/SecretFinder.git secretfinder
-          cd secretfinder
-          pip3 install -r requirements.txt --break-system-packages
-          cd ..
-
-          git clone https://github.com/GerbenJavado/LinkFinder.git linkfinder
-          cd linkfinder
-          pip3 install -r requirements.txt --break-system-packages
-          pip3 install . --break-system-packages
-          cd ..
+          # Nuclei
+          wget -q https://github.com/projectdiscovery/nuclei/releases/download/v3.2.9/nuclei_3.2.9_linux_amd64.zip
+          unzip -o -q nuclei_3.2.9_linux_amd64.zip
+          sudo mv nuclei /usr/local/bin/
           
-          rm *.zip *.tar.gz
+          rm *.zip
+          nuclei -update-templates
 
-      # 2. الجمع
-      - name: Harvest JS Files
+      # 2. سحب الذاكرة
+      - name: Checkout Memory
+        uses: actions/checkout@v4
+
+      # 3. تحديد الهدف (Northern.tech Staging Only)
+      - name: Set Target
+        run: echo "TARGET=staging.hosted.mender.io" >> $GITHUB_ENV
+
+      # 4. الاستطلاع (Recon) - تصحيح مكان الهيدر
+      - name: Run Subfinder & Httpx
+        env:
+          GITHUB_TOKEN: ${{ secrets.GH_PAT }}
+          CHAOS_KEY: ${{ secrets.CHAOS_KEY }}
+          SHODAN_API_KEY: ${{ secrets.SHODAN_API_KEY }}
+          SECURITYTRAILS_TOKEN: ${{ secrets.SECURITYTRAILS_TOKEN }}
         run: |
-          echo "🧪 Collecting JS from ${{ github.event.inputs.URL }}..."
-          mkdir -p /home/runner/
-          touch /home/runner/.gau.toml
-
-          # Live
-          katana -u ${{ github.event.inputs.URL }} -d 2 -jc -kf all -em js,json -c 5 -o live_js.txt || true
+          echo "🔎 Scanning ${{ env.TARGET }}..."
           
-          # History
-          echo "${{ github.event.inputs.URL }}" | gau --subs --providers wayback,commoncrawl | grep -E "\.js$" > history_js.txt || true
+          # تجميع الدومينات (بدون هيدر لأنه DNS)
+          subfinder -d ${{ env.TARGET }} -all -silent -o all_subs.txt
+          # إضافة الدومين الأصلي
+          echo "${{ env.TARGET }}" >> all_subs.txt
           
-          # Merge & Validate
-          cat live_js.txt history_js.txt | sort -u > candidates.txt
-          httpx -l candidates.txt -mc 200 -silent -H "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64)" -o valid_js.txt
+          # فلترة الأحياء (هنا نحط الهيدر الإجباري لـ HackerOne)
+          httpx -l all_subs.txt -mc 200 -silent \
+            -H "X-HackerOne-Research: mohamedfathy0x" \
+            -H "User-Agent: Mozilla/5.0 (Security-Research)" \
+            -rl 10 \
+            -o live_targets.txt
           
-          echo "JS_COUNT=$(wc -l < valid_js.txt)" >> $GITHUB_ENV
+          echo "Alive Targets: $(wc -l < live_targets.txt)"
 
-      # 3. Source Maps
-      - name: Check for Source Maps
+      # 5. الذاكرة (توحيد أسماء الملفات)
+      - name: Diff Logic
         run: |
-          if [ -s valid_js.txt ]; then
-            touch source_maps_found.txt
-            head -n 30 valid_js.txt | while read url; do
-              status=$(curl -o /dev/null -s -w "%{http_code}\n" "${url}.map")
-              if [ "$status" == "200" ]; then echo "${url}.map" >> source_maps_found.txt; fi
-            done
-          fi
+          # التأكد من وجود الملف لتجنب الأخطاء
+          touch previous_memory.txt
+          
+          sort live_targets.txt > current_sorted.txt
+          sort previous_memory.txt > previous_sorted.txt
+          
+          # الجديد
+          comm -23 current_sorted.txt previous_sorted.txt > new_targets.txt
+          # القديم
+          comm -12 current_sorted.txt previous_sorted.txt > old_targets.txt
+          
+          echo "NEW_COUNT=$(wc -l < new_targets.txt)" >> $GITHUB_ENV
+          echo "OLD_COUNT=$(wc -l < old_targets.txt)" >> $GITHUB_ENV
 
-      # 4. Secrets
-      - name: Extract Secrets
+      # 6. هجوم عميق على الجديد
+      - name: Deep Scan (NEW)
+        if: env.NEW_COUNT > 0
         run: |
-          if [ -s valid_js.txt ]; then
-            touch secrets.txt
-            grep -E "AKIA[0-9A-Z]{16}" valid_js.txt >> secrets.txt || true
-            grep -E "AIza[0-9A-Za-z_-]{35}" valid_js.txt >> secrets.txt || true
-            
-            head -n 10 valid_js.txt | while read url; do
-              python3 secretfinder/SecretFinder.py -i "$url" -o cli >> temp_secrets.txt || true
-            done
-            cat temp_secrets.txt | grep -- "->" >> secrets.txt || true
-            sort -u secrets.txt > unique_secrets.txt
-            echo "SECRETS_COUNT=$(wc -l < unique_secrets.txt)" >> $GITHUB_ENV
-          else
-            echo "SECRETS_COUNT=0" >> $GITHUB_ENV
-          fi
+          echo "🔥 Attack on NEW targets..."
+          # -H: الهيدر الخاص بك (مهم جداً)
+          nuclei -l new_targets.txt \
+            -H "X-HackerOne-Research: mohamedfathy0x" \
+            -s critical,high,medium \
+            -rl 10 -bs 2 -c 5 -timeout 10 \
+            -je nuclei_new.json
 
-      # 5. Endpoints (توسيع البحث)
-      - name: Deep Endpoint Analysis
+      # 7. هجوم خفيف على القديم
+      - name: Light Scan (OLD)
+        if: env.OLD_COUNT > 0
         run: |
-          if [ -s valid_js.txt ]; then
-            touch clean_endpoints.txt
-            # شغلنا LinkFinder على أول 20 ملف عشان نزود الفرصة
-            head -n 20 valid_js.txt | while read url; do
-              python3 linkfinder/linkfinder.py -i "$url" -o cli >> raw_links.txt || true
-            done
-            # تحسين الفلتر عشان يلقط أي مسار يبدأ بـ /
-            grep -oE "(\/)[a-zA-Z0-9_?&=\/\-\#\.]+" raw_links.txt | sort -u > clean_endpoints.txt
-            echo "ENDPOINTS_COUNT=$(wc -l < clean_endpoints.txt)" >> $GITHUB_ENV
-          else
-            echo "ENDPOINTS_COUNT=0" >> $GITHUB_ENV
-          fi
+          echo "🛡️ Monitoring OLD targets..."
+          nuclei -l old_targets.txt \
+            -H "X-HackerOne-Research: mohamedfathy0x" \
+            -tags takeover,cve,exposure \
+            -s critical,high \
+            -rl 10 \
+            -je nuclei_old.json
 
-      # 6. التبليغ الإجباري (Guaranteed Report)
-      - name: Send Final Report
+      # 8. التبليغ (ثغرات فقط) - الطريقة الأضمن للمتغيرات
+      - name: Alert System
         env:
           TG_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
           TG_CHAT: ${{ secrets.TELEGRAM_CHAT_ID }}
         run: |
-          MSG="🧪 **JS ALCHEMY REPORT**
-          Target: ${{ github.event.inputs.URL }}
+          touch nuclei_new.json nuclei_old.json
+          cat nuclei_new.json nuclei_old.json > all_vulns.json
           
-          📂 JS Files Scanned: ${{ env.JS_COUNT }}
-          💎 Secrets Found: ${{ env.SECRETS_COUNT }}
-          🗺️ Endpoints Found: ${{ env.ENDPOINTS_COUNT }}
-          
-          *(Check Artifacts for details)*"
-          
-          curl -s -X POST "https://api.telegram.org/bot$TG_TOKEN/sendMessage" \
-          -d chat_id="$TG_CHAT" -d text="$MSG" -d parse_mode="Markdown"
-          
-          # لو فيه أسرار ابعتها
-          if [ -s unique_secrets.txt ]; then
-            curl -s -X POST "https://api.telegram.org/bot$TG_TOKEN/sendMessage" \
-            -d chat_id="$TG_CHAT" -d text="🔥 **Secrets Preview:** $(head -n 5 unique_secrets.txt)"
-          fi
-          
-          # لو فيه إندبوينتس ابعت الملف
-          if [ -s clean_endpoints.txt ]; then
-             curl -s -X POST "https://api.telegram.org/bot$TG_TOKEN/sendDocument" \
-             -F chat_id="$TG_CHAT" -F document=@"clean_endpoints.txt" -F caption="Endpoints Map"
+          if [ -s all_vulns.json ]; then
+            cat all_vulns.json | while read line; do
+              NAME=$(echo $line | jq -r '.info.name')
+              SEVERITY=$(echo $line | jq -r '.info.severity')
+              URL=$(echo $line | jq -r '.matched-at')
+              
+              MSG="🚨 **VULN FOUND (Mender)!**
+              🐛 Bug: $NAME
+              ⚠️ Severity: $SEVERITY
+              🔗 URL: \`$URL\`"
+              
+              # استخدام المتغيرات بطريقة الـ Bash الآمنة
+              curl -s -X POST "https://api.telegram.org/bot$TG_TOKEN/sendMessage" \
+              -d chat_id="$TG_CHAT" \
+              -d text="$MSG" -d parse_mode="Markdown"
+              sleep 1
+            done
+          else
+             echo "✅ Safe. No bugs found on ${{ env.TARGET }}"
           fi
 
-      # 7. Artifacts
-      - name: Upload Artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: V18-Loot
-          path: |
-            valid_js.txt
-            unique_secrets.txt
-            clean_endpoints.txt
-            source_maps_found.txt
+      # 9. حفظ الذاكرة (توحيد الأسماء)
+      - name: Save Memory
+        run: |
+          git config --global user.name "hunter-bot"
+          git config --global user.email "bot@noreply.com"
+          
+          git pull origin main --rebase || echo "No rebase needed"
+          
+          rm -f previous_memory.txt
+          mv current_sorted.txt previous_memory.txt
+          
+          git add previous_memory.txt
+          if git diff --staged --quiet; then
+            echo "Memory unchanged"
+          else
+            git commit -m "Update Memory for ${{ env.TARGET }}"
+            git push
+          fi
