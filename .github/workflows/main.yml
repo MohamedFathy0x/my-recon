@@ -1,4 +1,4 @@
-name: V27 - The Ghost Hunter (Official Action Fix)
+name: V27 - The Ghost Hunter (Final Fix)
 
 on:
   schedule:
@@ -12,7 +12,7 @@ jobs:
       contents: write
     
     steps:
-      # 1. تحديد الأهداف (مفيش تغيير هنا)
+      # 1. تحديد الأهداف
       - name: Set Targets
         run: |
           touch targets.txt
@@ -22,17 +22,17 @@ jobs:
           echo "https://donorbox.org" >> targets.txt
           echo "https://donorbox.org/admin" >> targets.txt
 
-      # 2. الهجوم الشبحي (باستخدام الأكشن الرسمي لتفادي خطأ الساندبوكس) 🛡️
+      # 2. الهجوم الشبحي (التعديل: استخدام @main بدل @v1) 🛡️
       - name: Ghost Scan (Official Dockerized Action)
-        uses: projectdiscovery/nuclei-action@v1
+        uses: projectdiscovery/nuclei-action@main
         with:
           target: targets.txt
-          # هنا بنمرر الأوامر، والأكشن هيظبط البيئة والكروم لوحده
+          # الفلاجات زي ما هي، الأكشن هيتعامل مع الباقي
           flags: "-headless -headless-options no-sandbox,disable-gpu,disable-dev-shm-usage -H 'User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36' -tags xss,dom,fuzz,injection,cve -s critical,high,medium -rl 5 -bs 1 -c 2 -timeout 15 -je ghost_results.json"
 
-      # 3. التبليغ (نظام التنبيهات زي ما هو)
+      # 3. التبليغ
       - name: Alert System
-        if: always() # يشتغل حتى لو النيوكلي لقى ثغرات وخرج بكود مختلف
+        if: always() 
         env:
           TG_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
           TG_CHAT: ${{ secrets.TELEGRAM_CHAT_ID }}
