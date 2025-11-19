@@ -36,24 +36,19 @@ jobs:
           echo "https://donorbox.org" >> targets.txt
           echo "https://donorbox.org/admin" >> targets.txt
 
-      # 3. الهجوم الشبحي (The Ghost Attack) 👻
+      # 3. الهجوم الشبحي (The Ghost Attack - Fixed)
       - name: Ghost Scan (Headless + Evasion)
         run: |
           echo "👻 Starting Stealth Attack..."
           
-          # تفاصيل الإعدادات الشبحية:
-          # -headless: تشغيل متصفح حقيقي
-          # -headless-options: إخفاء بصمة الروبوت
-          # -delay 2s: استنى ثانيتين بين كل طلب (عشان منتحظرش)
-          # -rl 5: خمس طلبات بس في الثانية (بطيء بس آمن)
-          
+          # شلنا -delay واستخدمنا -rl للتحكم في السرعة
           nuclei -l targets.txt \
             -headless \
             -headless-options '["--disable-gpu", "--no-sandbox", "--disable-dev-shm-usage", "--hide-scrollbars", "--mute-audio"]' \
             -H "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36" \
             -tags xss,dom,fuzz,injection,cve \
             -s critical,high,medium \
-            -rl 5 -bs 1 -c 2 -delay 2s -timeout 15 \
+            -rl 5 -bs 1 -c 2 -timeout 15 \
             -je ghost_results.json
 
       # 4. التبليغ
