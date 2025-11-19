@@ -1,4 +1,4 @@
-name: V26 - The Ghost Hunter (Stealth & Evasion)
+name: V26.2 - The Ghost Hunter (Fixed Chrome Sandbox)
 
 on:
   schedule:
@@ -12,19 +12,19 @@ jobs:
       contents: write
     
     steps:
-      # 1. التثبيت
-      - name: Install Elite Tools
+      # 1. التثبيت (شامل المتصفح)
+      - name: Install Arsenal
         run: |
           sudo apt-get update && sudo apt-get install -y coreutils jq wget unzip libpcap-dev google-chrome-stable
           
-          # تثبيت Nuclei
+          # Nuclei
           wget -q https://github.com/projectdiscovery/nuclei/releases/download/v3.2.9/nuclei_3.2.9_linux_amd64.zip
           unzip -o -q nuclei_3.2.9_linux_amd64.zip
           sudo mv nuclei /usr/local/bin/
           
           rm *.zip
           nuclei -update-templates
-          # تم حذف سطر install-headless-browser لأنه غير ضروري ومسبب للخطأ
+          # شلنا install-headless-browser عشان ميحصلش تضارب
 
       # 2. تحديد الأهداف
       - name: Set Targets
@@ -36,15 +36,18 @@ jobs:
           echo "https://donorbox.org" >> targets.txt
           echo "https://donorbox.org/admin" >> targets.txt
 
-      # 3. الهجوم الشبحي (The Ghost Attack - Fixed)
-      - name: Ghost Scan (Headless + Evasion)
+      # 3. الهجوم الشبحي (مع حل الـ Sandbox) 👻
+      - name: Ghost Scan (Headless + Sandbox Fix)
         run: |
           echo "👻 Starting Stealth Attack..."
           
-          # شلنا -delay واستخدمنا -rl للتحكم في السرعة
+          # -headless: تشغيل متصفح
+          # -headless-options: ضفنا --no-sandbox عشان يشتغل في GitHub Actions
+          # -rl 5: سرعة بطيئة للتخفي
+          
           nuclei -l targets.txt \
             -headless \
-            -headless-options '["--disable-gpu", "--no-sandbox", "--disable-dev-shm-usage", "--hide-scrollbars", "--mute-audio"]' \
+            -headless-options '["--no-sandbox", "--disable-gpu", "--disable-dev-shm-usage", "--hide-scrollbars", "--mute-audio"]' \
             -H "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36" \
             -tags xss,dom,fuzz,injection,cve \
             -s critical,high,medium \
@@ -74,5 +77,5 @@ jobs:
               sleep 2
             done
           else
-             echo "✅ Target is tough. Ghost mode found nothing this time."
+             echo "✅ Ghost mode scan finished. No immediate threats found."
           fi
