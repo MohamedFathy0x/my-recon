@@ -1,0 +1,3 @@
+https://artifacts.staging.hosted.mender.io
+https://staging.hosted.mender.io
+https://www.staging.hosted.mender.io
