@@ -12,16 +12,16 @@ jobs:
       contents: write
     
     steps:
-      # 1. التثبيت (رجعنا للأساسيات)
+      # 1. التثبيت (مع إضافة مكتبات الكروم الضرورية)
       - name: Install Arsenal
         run: |
-          sudo apt-get update && sudo apt-get install -y coreutils jq wget unzip libpcap-dev
+          # نثبت chromium-browser فقط لضمان وجود مكتبات النظام المطلوبة (libgbm, etc)
+          sudo apt-get update && sudo apt-get install -y coreutils jq wget unzip libpcap-dev chromium-browser
           
           # Nuclei
           wget -q https://github.com/projectdiscovery/nuclei/releases/download/v3.2.9/nuclei_3.2.9_linux_amd64.zip
           unzip -o -q nuclei_3.2.9_linux_amd64.zip
           sudo mv nuclei /usr/local/bin/
-          
           rm *.zip
           nuclei -update-templates
 
@@ -35,23 +35,17 @@ jobs:
           echo "https://donorbox.org" >> targets.txt
           echo "https://donorbox.org/admin" >> targets.txt
 
-      # 3. الهجوم الشبحي (التصحيح النهائي للصيغة) 👻
-      - name: Ghost Scan (Fixed Arguments)
+      # 3. الهجوم الشبحي (Fixed & Forced) 👻
+      - name: Ghost Scan (Sanitized)
         run: |
           echo "👻 Starting Stealth Attack..."
           
-          # التصحيح:
-          # -headless-options تأخذ القيم مفصولة بفواصل بدون مسافات
-          # إضافة disable-setuid-sandbox ضرورية جداً في بيئة Docker/Actions
+          # التغيير الجذري:
+          # 1. تمت إضافة الفواصل (--) للقيم.
+          # 2. لا توجد أي مسافات بين القيم.
+          # 3. استخدام سطر واحد لضمان عدم كسر الأمر.
           
-          nuclei -l targets.txt \
-            -headless \
-            -headless-options "no-sandbox,disable-setuid-sandbox,disable-gpu,disable-dev-shm-usage" \
-            -H "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36" \
-            -tags xss,dom,fuzz,injection,cve \
-            -s critical,high,medium \
-            -rl 5 -bs 1 -c 2 -timeout 15 \
-            -je ghost_results.json
+          nuclei -l targets.txt -headless -headless-options --no-sandbox,--disable-gpu,--disable-dev-shm-usage,--disable-setuid-sandbox -H "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36" -tags xss,dom,fuzz,injection,cve -s critical,high,medium -rl 5 -bs 1 -c 2 -timeout 15 -je ghost_results.json
 
       # 4. التبليغ
       - name: Alert System
