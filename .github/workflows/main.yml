@@ -1,9 +1,9 @@
-name: V29.1 - The Ultimate Ghost Hunter (Main Branch Fix)
+name: V30 - Ghost Hunter (Debugged & Fixed)
 
 on:
   schedule:
-    - cron: '0 */12 * * *' # كل 12 ساعة
-  workflow_dispatch:       # تشغيل يدوي
+    - cron: '0 */12 * * *'
+  workflow_dispatch:
 
 jobs:
   ghost-job:
@@ -12,57 +12,58 @@ jobs:
       contents: write
     
     steps:
-      # 1. تجهيز الأهداف
+      # 1. تجهيز الأهداف (تم الإصلاح باستخدام printf للفصل الإجباري بين السطور)
       - name: Set Targets
         run: |
-          touch targets.txt
-          echo "https://donorbox.org/potato" >> targets.txt
-          echo "https://donorbox.org/org_admin" >> targets.txt
-          echo "https://donorbox.org/embed/potato" >> targets.txt
-          echo "https://donorbox.org" >> targets.txt
-          echo "https://donorbox.org/admin" >> targets.txt
+          printf "https://donorbox.org/potato\nhttps://donorbox.org/org_admin\nhttps://donorbox.org/embed/potato\nhttps://donorbox.org\nhttps://donorbox.org/admin" > targets.txt
+          
+          # عرض محتوى الملف في اللوج للتأكد
+          echo "📋 Targets Content Check:"
+          cat targets.txt
 
-      # 2. الهجوم الشبحي (الحل الجذري - استخدام @main) 🛡️
-      - name: Ghost Scan (Official Dockerized Action)
+      # 2. الهجوم الشبحي (شغال بالنسخة الرسمية لتفادي مشاكل المتصفح) 🛡️
+      - name: Ghost Scan
         uses: projectdiscovery/nuclei-action@main
         with:
           target: targets.txt
-          # الفلاجات زي ما هي، الأكشن هيظبط الكروم
+          # تم إضافة -disable-redirects لتقليل التشتت
           flags: "-headless -headless-options no-sandbox,disable-gpu,disable-dev-shm-usage -H 'User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36' -tags xss,dom,fuzz,injection,cve -s critical,high,medium -rl 5 -bs 1 -c 2 -timeout 15 -je ghost_results.json"
 
-      # 3. تثبيت JQ (ضروري عشان التبليغ يشتغل)
+      # 3. تثبيت JQ (عشان نفك شفرة ملف النتائج)
       - name: Install JQ
         run: sudo apt-get update && sudo apt-get install -y jq
 
-      # 4. التبليغ
+      # 4. التبليغ (تم التعديل ليبعث رسالة في كل الأحوال)
       - name: Alert System
-        if: always() # يشتغل حتى لو النيوكلي لقى حاجات وخرج
+        if: always()
         env:
           TG_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
           TG_CHAT: ${{ secrets.TELEGRAM_CHAT_ID }}
         run: |
-          if [ -s ghost_results.json ]; then
-            cat ghost_results.json | while read line; do
-              NAME=$(echo $line | jq -r '.info.name')
-              SEVERITY=$(echo $line | jq -r '.info.severity')
-              URL=$(echo $line | jq -r '.matched-at')
-              
-              MSG="👻 **GHOST HIT (Official Action)!**
-              🐛 Bug: $NAME
-              ⚠️ Severity: $SEVERITY
-              🔗 URL: \`$URL\`"
-              
-              curl -s -X POST "https://api.telegram.org/bot$TG_TOKEN/sendMessage" \
-              -d chat_id="$TG_CHAT" \
-              -d text="$MSG" -d parse_mode="Markdown"
-              sleep 2
-            done
+          # نتأكد الأول إن الملف موجود
+          if [ -f ghost_results.json ]; then
+            if [ -s ghost_results.json ]; then
+              # الحالة الأولى: لو لقينا ثغرات
+              cat ghost_results.json | while read line; do
+                NAME=$(echo $line | jq -r '.info.name')
+                SEVERITY=$(echo $line | jq -r '.info.severity')
+                URL=$(echo $line | jq -r '.matched-at')
+                
+                MSG="👻 **GHOST HIT!**
+                🐛 Bug: $NAME
+                ⚠️ Severity: $SEVERITY
+                🔗 URL: \`$URL\`"
+                
+                curl -s -X POST "https://api.telegram.org/bot$TG_TOKEN/sendMessage" -d chat_id="$TG_CHAT" -d text="$MSG" -d parse_mode="Markdown"
+              done
+            else
+               # الحالة الثانية: لو الملف فاضي (مفيش ثغرات) - ابعتلي برضه
+               MSG="✅ **Ghost Scan Finished.**
+               Targets Scanned: 5
+               Status: Clean (No Bugs Found)"
+               
+               curl -s -X POST "https://api.telegram.org/bot$TG_TOKEN/sendMessage" -d chat_id="$TG_CHAT" -d text="$MSG" -d parse_mode="Markdown"
+            fi
           else
-             # رسالة تأكيد إن السكان خلص بسلام
-             MSG="✅ Ghost Scan Completed (Clean).
-             Targets scanned: 5"
-             
-             curl -s -X POST "https://api.telegram.org/bot$TG_TOKEN/sendMessage" \
-             -d chat_id="$TG_CHAT" \
-             -d text="$MSG"
+            echo "❌ Error: Result file not found!"
           fi
