@@ -41,12 +41,12 @@ jobs:
           echo "👻 Starting Stealth Attack..."
           
           # التصحيح:
-          # 1. رجعنا لـ -headless-options (لأنه هو اللي شغال في النسخة دي)
-          # 2. حطينا القيم جوه quotes ومعاها الشرط (--)
+          # -headless-options تأخذ القيم مفصولة بفواصل بدون مسافات
+          # إضافة disable-setuid-sandbox ضرورية جداً في بيئة Docker/Actions
           
           nuclei -l targets.txt \
             -headless \
-            -headless-options "--no-sandbox, --disable-gpu, --disable-dev-shm-usage" \
+            -headless-options "no-sandbox,disable-setuid-sandbox,disable-gpu,disable-dev-shm-usage" \
             -H "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36" \
             -tags xss,dom,fuzz,injection,cve \
             -s critical,high,medium \
