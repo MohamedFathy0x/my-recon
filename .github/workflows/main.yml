@@ -1,9 +1,9 @@
-name: V26.3 - The Ghost Hunter (Sandbox Syntax Fixed)
+name: V26.4 - The Ghost Hunter (Sandbox Final Fix)
 
 on:
   schedule:
-    - cron: '0 */12 * * *' # كل 12 ساعة
-  workflow_dispatch:       # تشغيل يدوي
+    - cron: '0 */12 * * *'
+  workflow_dispatch:
 
 jobs:
   ghost-job:
@@ -24,7 +24,6 @@ jobs:
           
           rm *.zip
           nuclei -update-templates
-          # حذفنا سطر install-headless-browser لأنه بيعمل مشاكل
 
       # 2. تحديد الأهداف
       - name: Set Targets
@@ -36,17 +35,17 @@ jobs:
           echo "https://donorbox.org" >> targets.txt
           echo "https://donorbox.org/admin" >> targets.txt
 
-      # 3. الهجوم الشبحي (تصحيح صيغة الـ Headless Options) 👻
-      - name: Ghost Scan (Headless + Fixed Sandbox)
+      # 3. الهجوم الشبحي (الحل النهائي للـ Sandbox)
+      - name: Ghost Scan (Headless Fixed)
         run: |
           echo "👻 Starting Stealth Attack..."
           
-          # التصحيح هنا: كتبنا الخيارات مفصولة بفاصلة وبدون شرط
-          # no-sandbox,disable-setuid-sandbox: دول اللي بيحلوا مشكلة الكروم في اللينكس
+          # الحل الجذري: استخدام -chromium-options بدلاً من -headless-options
+          # وتمرير المسار الصحيح للكروم
           
           nuclei -l targets.txt \
             -headless \
-            -headless-options no-sandbox,disable-setuid-sandbox,disable-dev-shm-usage,disable-gpu \
+            -chromium-options "no-sandbox,disable-setuid-sandbox,disable-gpu,disable-dev-shm-usage" \
             -H "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36" \
             -tags xss,dom,fuzz,injection,cve \
             -s critical,high,medium \
@@ -76,5 +75,5 @@ jobs:
               sleep 2
             done
           else
-             echo "✅ Ghost mode scan finished. No immediate threats found."
+             echo "✅ Ghost mode scan finished."
           fi
