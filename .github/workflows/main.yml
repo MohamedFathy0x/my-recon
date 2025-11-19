@@ -12,19 +12,19 @@ jobs:
       contents: write
     
     steps:
-      # 1. التثبيت (شامل المتصفح)
-      - name: Install Arsenal
+      # 1. التثبيت
+      - name: Install Elite Tools
         run: |
           sudo apt-get update && sudo apt-get install -y coreutils jq wget unzip libpcap-dev google-chrome-stable
           
-          # Nuclei
+          # تثبيت Nuclei
           wget -q https://github.com/projectdiscovery/nuclei/releases/download/v3.2.9/nuclei_3.2.9_linux_amd64.zip
           unzip -o -q nuclei_3.2.9_linux_amd64.zip
           sudo mv nuclei /usr/local/bin/
           
           rm *.zip
           nuclei -update-templates
-          nuclei -install-headless-browser
+          # تم حذف سطر install-headless-browser لأنه غير ضروري ومسبب للخطأ
 
       # 2. تحديد الأهداف
       - name: Set Targets
