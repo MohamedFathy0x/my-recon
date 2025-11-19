@@ -1,4 +1,4 @@
-name: V26.2 - The Ghost Hunter (Fixed Chrome Sandbox)
+name: V26.3 - The Ghost Hunter (Sandbox Syntax Fixed)
 
 on:
   schedule:
@@ -12,7 +12,7 @@ jobs:
       contents: write
     
     steps:
-      # 1. التثبيت (شامل المتصفح)
+      # 1. التثبيت
       - name: Install Arsenal
         run: |
           sudo apt-get update && sudo apt-get install -y coreutils jq wget unzip libpcap-dev google-chrome-stable
@@ -24,7 +24,7 @@ jobs:
           
           rm *.zip
           nuclei -update-templates
-          # شلنا install-headless-browser عشان ميحصلش تضارب
+          # حذفنا سطر install-headless-browser لأنه بيعمل مشاكل
 
       # 2. تحديد الأهداف
       - name: Set Targets
@@ -36,18 +36,17 @@ jobs:
           echo "https://donorbox.org" >> targets.txt
           echo "https://donorbox.org/admin" >> targets.txt
 
-      # 3. الهجوم الشبحي (مع حل الـ Sandbox) 👻
-      - name: Ghost Scan (Headless + Sandbox Fix)
+      # 3. الهجوم الشبحي (تصحيح صيغة الـ Headless Options) 👻
+      - name: Ghost Scan (Headless + Fixed Sandbox)
         run: |
           echo "👻 Starting Stealth Attack..."
           
-          # -headless: تشغيل متصفح
-          # -headless-options: ضفنا --no-sandbox عشان يشتغل في GitHub Actions
-          # -rl 5: سرعة بطيئة للتخفي
+          # التصحيح هنا: كتبنا الخيارات مفصولة بفاصلة وبدون شرط
+          # no-sandbox,disable-setuid-sandbox: دول اللي بيحلوا مشكلة الكروم في اللينكس
           
           nuclei -l targets.txt \
             -headless \
-            -headless-options '["--no-sandbox", "--disable-gpu", "--disable-dev-shm-usage", "--hide-scrollbars", "--mute-audio"]' \
+            -headless-options no-sandbox,disable-setuid-sandbox,disable-dev-shm-usage,disable-gpu \
             -H "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36" \
             -tags xss,dom,fuzz,injection,cve \
             -s critical,high,medium \
