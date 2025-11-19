@@ -1,9 +1,9 @@
-name: V27 - The Ghost Hunter (Final Fix)
+name: V29.1 - The Ultimate Ghost Hunter (Main Branch Fix)
 
 on:
   schedule:
-    - cron: '0 */12 * * *'
-  workflow_dispatch:
+    - cron: '0 */12 * * *' # كل 12 ساعة
+  workflow_dispatch:       # تشغيل يدوي
 
 jobs:
   ghost-job:
@@ -12,7 +12,7 @@ jobs:
       contents: write
     
     steps:
-      # 1. تحديد الأهداف
+      # 1. تجهيز الأهداف
       - name: Set Targets
         run: |
           touch targets.txt
@@ -22,17 +22,21 @@ jobs:
           echo "https://donorbox.org" >> targets.txt
           echo "https://donorbox.org/admin" >> targets.txt
 
-      # 2. الهجوم الشبحي (التعديل: استخدام @main بدل @v1) 🛡️
+      # 2. الهجوم الشبحي (الحل الجذري - استخدام @main) 🛡️
       - name: Ghost Scan (Official Dockerized Action)
         uses: projectdiscovery/nuclei-action@main
         with:
           target: targets.txt
-          # الفلاجات زي ما هي، الأكشن هيتعامل مع الباقي
+          # الفلاجات زي ما هي، الأكشن هيظبط الكروم
           flags: "-headless -headless-options no-sandbox,disable-gpu,disable-dev-shm-usage -H 'User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36' -tags xss,dom,fuzz,injection,cve -s critical,high,medium -rl 5 -bs 1 -c 2 -timeout 15 -je ghost_results.json"
 
-      # 3. التبليغ
+      # 3. تثبيت JQ (ضروري عشان التبليغ يشتغل)
+      - name: Install JQ
+        run: sudo apt-get update && sudo apt-get install -y jq
+
+      # 4. التبليغ
       - name: Alert System
-        if: always() 
+        if: always() # يشتغل حتى لو النيوكلي لقى حاجات وخرج
         env:
           TG_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
           TG_CHAT: ${{ secrets.TELEGRAM_CHAT_ID }}
@@ -43,7 +47,7 @@ jobs:
               SEVERITY=$(echo $line | jq -r '.info.severity')
               URL=$(echo $line | jq -r '.matched-at')
               
-              MSG="👻 **GHOST HIT (Donorbox)!**
+              MSG="👻 **GHOST HIT (Official Action)!**
               🐛 Bug: $NAME
               ⚠️ Severity: $SEVERITY
               🔗 URL: \`$URL\`"
@@ -54,5 +58,11 @@ jobs:
               sleep 2
             done
           else
-             echo "✅ Ghost scan finished. No vulnerabilities found this time."
+             # رسالة تأكيد إن السكان خلص بسلام
+             MSG="✅ Ghost Scan Completed (Clean).
+             Targets scanned: 5"
+             
+             curl -s -X POST "https://api.telegram.org/bot$TG_TOKEN/sendMessage" \
+             -d chat_id="$TG_CHAT" \
+             -d text="$MSG"
           fi
