@@ -1,164 +1,97 @@
-name: BMC Hunter - V10 Safe Mode (Nuclei Allowed)
+name: V25 - The Elite Hunter (Headless & Fuzzing)
 
 on:
   schedule:
     - cron: '0 */12 * * *' # كل 12 ساعة
-  workflow_dispatch:
-    inputs:
-      DOMAIN:
-        description: 'Target Domain'
-        required: true
-        default: 'bmc.nl'
+  workflow_dispatch:       # تشغيل يدوي
 
 jobs:
-  hunt-job:
+  elite-job:
     runs-on: ubuntu-latest
     permissions:
       contents: write
-      
+    
     steps:
-            # --- الخطوة 1: التثبيت اليدوي المضمون (مع تصليح unZIP) ---
-      - name: Install Tools (Manual & Stable)
+      # 1. التثبيت (مع دعم المتصفح Headless)
+      - name: Install Elite Tools
         run: |
-          sudo apt-get update && sudo apt-get install -y coreutils jq wget unzip
+          sudo apt-get update && sudo apt-get install -y coreutils jq wget unzip libpcap-dev google-chrome-stable
           
-          # تثبيت Subfinder (مهم: إضافة -o للتجاوز)
-          wget -q https://github.com/projectdiscovery/subfinder/releases/download/v2.6.6/subfinder_2.6.6_linux_amd64.zip
-          unzip -o -q subfinder_2.6.6_linux_amd64.zip
-          sudo mv subfinder /usr/local/bin/
-
-          # تثبيت Httpx (مهم: إضافة -o للتجاوز)
-          wget -q https://github.com/projectdiscovery/httpx/releases/download/v1.6.9/httpx_1.6.9_linux_amd64.zip
-          unzip -o -q httpx_1.6.9_linux_amd64.zip
-          sudo mv httpx /usr/local/bin/
-
-          # تثبيت Nuclei (مهم: إضافة -o للتجاوز)
-          wget -q https://github.com/projectdiscovery/nuclei/releases/download/v3.3.6/nuclei_3.3.6_linux_amd64.zip
-          unzip -o -q nuclei_3.3.6_linux_amd64.zip
+          # تثبيت Nuclei
+          wget -q https://github.com/projectdiscovery/nuclei/releases/download/v3.2.9/nuclei_3.2.9_linux_amd64.zip
+          unzip -o -q nuclei_3.2.9_linux_amd64.zip
           sudo mv nuclei /usr/local/bin/
-
+          
           rm *.zip
-          echo "All tools installed successfully!"
-
-
-      # 2. استرجاع الذاكرة
-      - name: Checkout Memory
-        uses: actions/checkout@v4
-
-      # 3. تحديد الهدف
-      - name: Set Target
-        id: target
-        run: |
-          if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
-            TARGET="${{ github.event.inputs.DOMAIN }}"
-          else
-            # !!!!!!!! الهدف الثابت !!!!!!!!
-            TARGET="bmc.nl" 
-          fi
-          echo "TARGET_DOMAIN=$TARGET" >> $GITHUB_ENV
-
-      # 4. البحث (Recon)
-      - name: Run Subfinder
-        env:
-          GITHUB_TOKEN: ${{ secrets.GH_PAT }} # اختياري
-        run: |
-          subfinder -d ${{ env.TARGET_DOMAIN }} -all -silent -o all_subs.txt
-          echo "${{ env.TARGET_DOMAIN }}" >> all_subs.txt
-
-      # 5. الفلترة (Httpx)
-      - name: Filter Live Hosts
-        run: |
-          httpx -l all_subs.txt -silent -o live_targets.txt
-          echo "Live targets: $(wc -l < live_targets.txt)"
-
-      # 6. الذاكرة (الجديد vs القديم)
-      - name: Diff Logic
-        id: diff
-        run: |
-          touch previous.txt
-          sort live_targets.txt > current_sorted.txt
-          sort previous.txt > previous_sorted.txt
-          
-          # تقسيم الأهداف
-          comm -23 current_sorted.txt previous_sorted.txt > new_targets.txt
-          comm -12 current_sorted.txt previous_sorted.txt > old_targets.txt
-          
-          echo "NEW_COUNT=$(wc -l < new_targets.txt)" >> $GITHUB_ENV
-          echo "OLD_COUNT=$(wc -l < old_targets.txt)" >> $GITHUB_ENV
-
-      # 7. إنذار الاستطلاع (لو فيه دومين جديد)
-      - name: Notify New Targets
-        if: env.NEW_COUNT > 0
-        run: |
-          TOP=$(head -n 10 new_targets.txt)
-          MSG="🎯 **NEW ASSETS FOUND (BMC)!**
-          Target: ${{ env.TARGET_DOMAIN }}
-          Count: ${{ env.NEW_COUNT }}
-          
-          \`\`\`
-          $TOP
-          \`\`\`
-          *(Starting Nuclei Scan...)*"
-          
-          curl -s -X POST "https://api.telegram.org/bot${{ secrets.TELEGRAM_TOKEN }}/sendMessage" \
-            -d chat_id="${{ secrets.TELEGRAM_CHAT_ID }}" \
-            -d text="$MSG" -d parse_mode="Markdown"
-
-      # 8. فحص الجديد (Nuclei - Safe Speed)
-      # التعديل هنا: السرعة 5 فقط حسب قوانينهم
-      - name: Nuclei Scan (NEW)
-        if: env.NEW_COUNT > 0
-        run: |
           nuclei -update-templates
-          # -rl 5: الالتزام بحد 5 طلبات في الثانية
-          # -bs 2: دفعة صغيرة جداً
-          nuclei -l new_targets.txt -s critical,high,medium -rl 5 -bs 2 -c 2 -retries 2 -o nuclei_new.txt
+          # تثبيت المتصفح لـ Nuclei Headless
+          nuclei -install-headless-browser
 
-      # 9. فحص القديم (Nuclei - Light & Safe)
-      - name: Nuclei Scan (OLD)
-        if: env.OLD_COUNT > 0
+      # 2. تحديد القائمة (القناص)
+      - name: Set Targets
         run: |
-          # فحص خفيف وبطيء أيضاً
-          nuclei -l old_targets.txt -tags takeover,exposure,misconfig -s high,critical -rl 5 -bs 2 -c 2 -o nuclei_old.txt
+          echo "🎯 Setting up target list..."
+          touch targets.txt
+          echo "https://donorbox.org/potato" >> targets.txt
+          echo "https://donorbox.org/org_admin" >> targets.txt
+          echo "https://donorbox.org/embed/potato" >> targets.txt
+          echo "https://donorbox.org" >> targets.txt
+          echo "https://donorbox.org/admin" >> targets.txt
 
-      # 10. تجميع النتائج
-      - name: Combine Results
+      # 3. المرحلة الأولى: الهجوم القياسي (Standard Attack)
+      - name: Phase 1 - Standard Scan
         run: |
-          touch nuclei_new.txt nuclei_old.txt
-          cat nuclei_new.txt nuclei_old.txt > final_results.txt
-          echo "VULNS_FOUND=$(wc -l < final_results.txt)" >> $GITHUB_ENV
+          echo "🔥 Phase 1: Standard Vulnerability Scan..."
+          # بنفحص الثغرات المعروفة والـ Misconfigs
+          nuclei -l targets.txt \
+            -H "User-Agent: Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)" \
+            -tags cve,misconfig,exposure,token,panel \
+            -s critical,high,medium \
+            -rl 10 -bs 2 -c 5 -timeout 8 \
+            -je phase1.json
 
-      # 11. إنذار الثغرات
-      - name: Alert Vulns
-        if: env.VULNS_FOUND > 0
+      # 4. المرحلة الثانية: الهجوم العميق (Headless & Fuzzing) 💀
+      # دي الإضافة القوية: بيشغل متصفح حقيقي وبيدور على XSS و DOM bugs
+      - name: Phase 2 - Headless & Fuzzing
         run: |
-          while IFS= read -r vuln; do
-            MSG="🔥 **VULNERABILITY FOUND!**
-            Target: ${{ env.TARGET_DOMAIN }}
-            \`\`\`
-            $vuln
-            \`\`\`"
-            curl -s -X POST "https://api.telegram.org/bot${{ secrets.TELEGRAM_TOKEN }}/sendMessage" \
-            -d chat_id="${{ secrets.TELEGRAM_CHAT_ID }}" \
-            -d text="$MSG" -d parse_mode="Markdown"
-            sleep 1
-          done < final_results.txt
+          echo "💀 Phase 2: Headless DOM & Fuzzing..."
+          # -headless: بيفتح كروم
+          # -tags xss,dom,fuzz: بيركز على الثغرات دي تحديداً
+          nuclei -l targets.txt \
+            -headless \
+            -tags xss,dom,fuzz,injection \
+            -s critical,high,medium \
+            -rl 5 -bs 1 -c 2 -timeout 15 \
+            -je phase2.json
 
-      # 12. حفظ الذاكرة
-      - name: Save Memory
+      # 5. التبليغ الموحد
+      - name: Alert System
+        env:
+          TG_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
+          TG_CHAT: ${{ secrets.TELEGRAM_CHAT_ID }}
         run: |
-          rm -f previous.txt
-          mv current_sorted.txt previous.txt
+          # دمج النتايج
+          touch phase1.json phase2.json
+          cat phase1.json phase2.json > all_hits.json
           
-          git config --global user.name "bot"
-          git config --global user.email "bot@noreply.com"
-          
-          git pull origin main --rebase || echo "No remote changes"
-          
-          git add previous.txt
-          if git diff --staged --quiet; then
-            echo "No changes"
+          if [ -s all_hits.json ]; then
+            cat all_hits.json | while read line; do
+              NAME=$(echo $line | jq -r '.info.name')
+              SEVERITY=$(echo $line | jq -r '.info.severity')
+              URL=$(echo $line | jq -r '.matched-at')
+              TYPE=$(echo $line | jq -r '.type // "http"')
+              
+              MSG="🚨 **ELITE HIT (Donorbox)!**
+              💀 Type: $TYPE
+              🐛 Bug: $NAME
+              ⚠️ Severity: $SEVERITY
+              🔗 URL: \`$URL\`"
+              
+              curl -s -X POST "https://api.telegram.org/bot$TG_TOKEN/sendMessage" \
+              -d chat_id="$TG_CHAT" \
+              -d text="$MSG" -d parse_mode="Markdown"
+              sleep 1
+            done
           else
-            git commit -m "Update memory for ${{ env.TARGET_DOMAIN }}"
-            git push
+             echo "✅ Clean run. No elite bugs found."
           fi
