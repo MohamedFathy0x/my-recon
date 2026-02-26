@@ -1,69 +1,156 @@
-name: V30 - Ghost Hunter (Debugged & Fixed)
+name: V40 - The Radar (Domain Monitor)
 
 on:
   schedule:
-    - cron: '0 */12 * * *'
-  workflow_dispatch:
+    - cron: '0 0 * * *' # يعمل يومياً منتصف الليل بتوقيت جرينتش
+  workflow_dispatch:    # للتشغيل اليدوي وقت ما تحب
 
 jobs:
-  ghost-job:
+  radar-job:
     runs-on: ubuntu-latest
     permissions:
-      contents: write
-    
+      contents: write # صلاحية أساسية لتحديث الذاكرة على جيت هب
+
     steps:
-      # 1. تجهيز الأهداف (تم الإصلاح باستخدام printf للفصل الإجباري بين السطور)
-      - name: Set Targets
+      # 1. سحب مساحة العمل
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      # 2. تثبيت أدوات الصيد (Subfinder & Httpx)
+      - name: Install Tools
         run: |
-          printf "https://donorbox.org/potato\nhttps://donorbox.org/org_admin\nhttps://donorbox.org/embed/potato\nhttps://donorbox.org\nhttps://donorbox.org/admin" > targets.txt
+          sudo apt-get update && sudo apt-get install -y jq wget unzip
           
-          # عرض محتوى الملف في اللوج للتأكد
-          echo "📋 Targets Content Check:"
-          cat targets.txt
+          echo "🛠️ Installing Subfinder..."
+          wget -q https://github.com/projectdiscovery/subfinder/releases/download/v2.6.6/subfinder_2.6.6_linux_amd64.zip
+          unzip -o -q subfinder_2.6.6_linux_amd64.zip
+          sudo mv subfinder /usr/local/bin/
+          
+          echo "🛠️ Installing Httpx..."
+          wget -q https://github.com/projectdiscovery/httpx/releases/download/v1.6.0/httpx_1.6.0_linux_amd64.zip
+          unzip -o -q httpx_1.6.0_linux_amd64.zip
+          sudo mv httpx /usr/local/bin/
+          rm *.zip
 
-      # 2. الهجوم الشبحي (شغال بالنسخة الرسمية لتفادي مشاكل المتصفح) 🛡️
-      - name: Ghost Scan
-        uses: projectdiscovery/nuclei-action@main
-        with:
-          target: targets.txt
-          # تم إضافة -disable-redirects لتقليل التشتت
-          flags: "-headless -headless-options no-sandbox,disable-gpu,disable-dev-shm-usage -H 'User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36' -tags xss,dom,fuzz,injection,cve -s critical,high,medium -rl 5 -bs 1 -c 2 -timeout 15 -je ghost_results.json"
+      # 3. تحديد الأهداف الأساسية (Scope)
+      - name: Define Target Scope
+        run: |
+          cat <<EOF > scope.txt
+          sdworx.com
+          flexincomeplan.com
+          myworkandme.com
+          huapii.com
+          sdworx.be
+          sdworx.cz
+          sdworx.dk
+          sdworx.de
+          sdworx.es
+          sdworx.fr
+          sdworx.hr
+          sdworx.ie
+          sdworx.it
+          sdworx.lu
+          sdworx.hu
+          sdworx.nl
+          sdworx.no
+          sdworx.at
+          sdworx.pl
+          sdworx.ro
+          sdworx.ch
+          sdworx.si
+          sdworx.rs
+          sdworx.fi
+          sdworx.se
+          sdworx.co.uk
+          EOF
+          echo "✅ Scope loaded. Base domains: $(wc -l < scope.txt)"
 
-      # 3. تثبيت JQ (عشان نفك شفرة ملف النتائج)
-      - name: Install JQ
-        run: sudo apt-get update && sudo apt-get install -y jq
+      # 4. تجميع النطاقات الفرعية (مع استخدام المفاتيح)
+      - name: Subdomain Enumeration
+        env:
+          GITHUB_TOKEN: ${{ secrets.GH_PAT }}
+          CHAOS_KEY: ${{ secrets.CHAOS_KEY }}
+          SHODAN_API_KEY: ${{ secrets.SHODAN_API_KEY }}
+          SECURITYTRAILS_TOKEN: ${{ secrets.SECURITYTRAILS_TOKEN }}
+        run: |
+          echo "🔍 Running Subfinder..."
+          subfinder -dL scope.txt -all -silent -o raw_subs.txt
+          
+          # دمج الأساسي مع الفرعي وإزالة التكرار
+          cat scope.txt raw_subs.txt | sort -u > unique_subs.txt
+          echo "🎯 Found $(wc -l < unique_subs.txt) unique domains."
 
-      # 4. التبليغ (تم التعديل ليبعث رسالة في كل الأحوال)
-      - name: Alert System
+      # 5. الفحص الحي (مع احترام حد 5 طلبات/ثانية)
+      - name: Check Alive Domains (Rate Limited)
+        run: |
+          echo "⚡ Checking live status (Strict 5 req/sec)..."
+          httpx -l unique_subs.txt -silent -rl 5 -o current_live.txt
+          sort -u current_live.txt -o current_live.txt
+          echo "✅ Total Alive Domains: $(wc -l < current_live.txt)"
+
+      # 6. استخراج الأهداف الجديدة فقط
+      - name: Diff Logic (Extract New)
+        run: |
+          touch previous_live.txt
+          sort previous_live.txt > old_sorted.txt
+          
+          # استخراج السطور الموجودة في الحالي ومش موجودة في القديم
+          comm -23 current_live.txt old_sorted.txt > new_domains.txt
+          
+          NEW_COUNT=$(wc -l < new_domains.txt)
+          echo "NEW_COUNT=$NEW_COUNT" >> $GITHUB_ENV
+          echo "🔥 New domains discovered: $NEW_COUNT"
+
+      # 7. إرسال التقرير على تليجرام
+      - name: Send Telegram Alert
         if: always()
         env:
           TG_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
           TG_CHAT: ${{ secrets.TELEGRAM_CHAT_ID }}
         run: |
-          # نتأكد الأول إن الملف موجود
-          if [ -f ghost_results.json ]; then
-            if [ -s ghost_results.json ]; then
-              # الحالة الأولى: لو لقينا ثغرات
-              cat ghost_results.json | while read line; do
-                NAME=$(echo $line | jq -r '.info.name')
-                SEVERITY=$(echo $line | jq -r '.info.severity')
-                URL=$(echo $line | jq -r '.matched-at')
-                
-                MSG="👻 **GHOST HIT!**
-                🐛 Bug: $NAME
-                ⚠️ Severity: $SEVERITY
-                🔗 URL: \`$URL\`"
-                
-                curl -s -X POST "https://api.telegram.org/bot$TG_TOKEN/sendMessage" -d chat_id="$TG_CHAT" -d text="$MSG" -d parse_mode="Markdown"
-              done
-            else
-               # الحالة الثانية: لو الملف فاضي (مفيش ثغرات) - ابعتلي برضه
-               MSG="✅ **Ghost Scan Finished.**
-               Targets Scanned: 5
-               Status: Clean (No Bugs Found)"
-               
-               curl -s -X POST "https://api.telegram.org/bot$TG_TOKEN/sendMessage" -d chat_id="$TG_CHAT" -d text="$MSG" -d parse_mode="Markdown"
+          if [ "${{ env.NEW_COUNT }}" -gt "0" ]; then
+            # تجهيز الرسالة بشكل آمن
+            echo -e "🌐 *SD Worx Radar Hit!*\n🎯 New Alive Domains: ${{ env.NEW_COUNT }}\n" > tg_msg.txt
+            
+            # إضافة أول 15 دومين لتجنب حجم الرسالة الضخم
+            head -n 15 new_domains.txt | while read domain; do
+              echo "✅ \`$domain\`" >> tg_msg.txt
+            done
+            
+            if [ "${{ env.NEW_COUNT }}" -gt "15" ]; then
+              echo -e "\n... and more! Check GitHub Repo." >> tg_msg.txt
             fi
+            
+            # إرسال الرسالة
+            curl -s -X POST "https://api.telegram.org/bot$TG_TOKEN/sendMessage" \
+              -d chat_id="$TG_CHAT" \
+              -data-urlencode text@tg_msg.txt \
+              -d parse_mode="Markdown"
           else
-            echo "❌ Error: Result file not found!"
+            echo -e "✅ *SD Worx Radar Finished.*\nStatus: Clean (No new domains today)." > tg_msg.txt
+            curl -s -X POST "https://api.telegram.org/bot$TG_TOKEN/sendMessage" \
+              -d chat_id="$TG_CHAT" \
+              -data-urlencode text@tg_msg.txt \
+              -d parse_mode="Markdown"
+          fi
+
+      # 8. حفظ النتائج في الذاكرة للغد
+      - name: Update Radar Memory
+        run: |
+          git config --global user.name "Radar Bot"
+          git config --global user.email "radar-bot@noreply.com"
+          
+          # دمج أي تغييرات خارجية لتجنب الـ Conflicts
+          git pull origin main --rebase || true
+          
+          mv current_live.txt previous_live.txt
+          
+          git add previous_live.txt
+          
+          # التحقق إذا كان في تغيير فعلي قبل عمل Commit
+          if git diff --staged --quiet; then
+            echo "No memory changes to commit."
+          else
+            git commit -m "Radar Update: Baseline adjusted"
+            git push
           fi
