@@ -102,6 +102,9 @@ http://dev.huapii.com
 http://dev.huapii.com:8080
 http://dev.huapii.com:8443
 http://digifaq.sdworx.com
+http://discover.test.huapii.com
+http://discover.test.huapii.com:8080
+http://discover.test.huapii.com:8443
 http://discovery.test.huapii.com
 http://discovery.test.huapii.com:8080
 http://discovery.test.huapii.com:8443
@@ -204,7 +207,6 @@ http://kristof.test.huapii.com:8080
 http://kristof.test.huapii.com:8443
 http://learning.sdworx.com
 http://learningfr.sdworx.com
-http://link.staffing.sdworx.com
 http://lms-cms.prd.sdworx.com
 http://login.acc.myworkandme.com
 http://login.acc.sdworx.com
@@ -235,7 +237,6 @@ http://mediahuis-uat.huapii.com:8443
 http://merit.sdworx.com
 http://merit.sdworx.com:8443
 http://my.acc.sdworx.com
-http://my.sdworx.co.uk
 http://my.sdworx.com
 http://myaccount.acc.sdworx.com
 http://myaccount.sdworx.com
@@ -286,6 +287,9 @@ http://readme.test.huapii.com:8080
 http://readme.test.huapii.com:8443
 http://redirect.sdworx.com
 http://redirect.sdworx.com:443
+http://rita.staging.huapii.com
+http://rita.staging.huapii.com:8080
+http://rita.staging.huapii.com:8443
 http://s3zsdm6tq2rb.dpgmedia.huapii.com
 http://s3zsdm6tq2rb.dpgmedia.huapii.com:8080
 http://scs-acc.sdworx.com
@@ -329,9 +333,9 @@ http://shop.sdworx.com
 http://sign.sdworx.com
 http://smartocr.sdworx.com
 http://spain.huapii.com
+http://spain.huapii.com:8080
 http://spain.huapii.com:8443
 http://sparc.demo.huapii.com
-http://sparc.demo.huapii.com:443
 http://sparc.demo.huapii.com:8080
 http://sparc.demo.huapii.com:8443
 http://sparc.huapii.com
@@ -346,7 +350,6 @@ http://sparc.test.huapii.com:8443
 http://staffing-cms.prd.sdworx.com
 http://staffingjobs.sdworx.com
 http://staging.huapii.com
-http://staging.huapii.com:443
 http://staging.huapii.com:8080
 http://staging.huapii.com:8443
 http://survey.sdworx.com
@@ -365,12 +368,12 @@ http://tryout.huapii.com:8080
 http://tryout.huapii.com:8443
 http://uh5my7v6m6zq.eblox1.test.huapii.com
 http://uh5my7v6m6zq.eblox1.test.huapii.com:443
+http://uh5my7v6m6zq.eblox1.test.huapii.com:8080
 http://uh5my7v6m6zq.eblox1.test.huapii.com:8443
 http://uk1.test.huapii.com
 http://uk1.test.huapii.com:8080
 http://uk1.test.huapii.com:8443
 http://ukone.test.huapii.com
-http://ukone.test.huapii.com:443
 http://ukone.test.huapii.com:8080
 http://ukone.test.huapii.com:8443
 http://unleashsdk.huapii.com
@@ -394,6 +397,7 @@ http://whm.huapii.com:8080
 http://www.admin.huapii.com
 http://www.admin.huapii.com:8080
 http://www.flexincomeplan.com
+http://www.heli.sdworx.nl
 http://www.huapii.com
 http://www.huapii.com:8080
 http://www.myworkandme.com
@@ -482,6 +486,7 @@ https://carlos.huapii.com
 https://cdn.acc.sdworx.com
 https://cdn.dev.sdworx.com
 https://cdn.sdworx.com
+https://cfe.huapii.com
 https://click.service.sdworx.com
 https://cloud.service.sdworx.com
 https://cm.sdworx.com
@@ -515,6 +520,7 @@ https://country-cms.prd.sdworx.com
 https://cpanel.huapii.com
 https://cpanel.huapii.com:8443
 https://customer-portal.sdworx.com
+https://dataflow.dev.huapii.com
 https://delft-circuits.huapii.com
 https://demo-env.huapii.com
 https://demo.futureofwork.huapii.com
@@ -533,6 +539,7 @@ https://dev4.dev.huapii.com
 https://dev5.dev.huapii.com
 https://dev6.dev.huapii.com
 https://digifaq.sdworx.com
+https://discover.test.huapii.com
 https://discovery.test.huapii.com
 https://docs.hr.acc.sdworx.com
 https://docs.hr.dev.sdworx.com
@@ -541,7 +548,10 @@ https://docs.hr.sdworx.com
 https://download.sdworx.co.uk
 https://dpgmedia-spiegel.huapii.com
 https://dpgmedia.huapii.com
+https://dpgtrial.huapii.com
+https://eblox1.huapii.com
 https://eblox1.test.huapii.com
+https://eblox2.huapii.com
 https://eblox2.test.huapii.com
 https://eldin.huapii.com
 https://emploi.sdworx.com
@@ -580,6 +590,7 @@ https://happy.huapii.com
 https://hazelheartwood.huapii.com
 https://hcm.sdworx.co.uk
 https://hcm2.sdworx.co.uk
+https://healthyfuture.huapii.com
 https://heliportal.cobra.sdworx.com
 https://hello.sdworx.com
 https://hellocustomer.huapii.com
@@ -650,7 +661,6 @@ https://mft.sdworx.com
 https://mijndakkracht.huapii.com
 https://mirto.huapii.com
 https://my.acc.sdworx.com
-https://my.sdworx.co.uk
 https://my.sdworx.com
 https://myaccount.acc.sdworx.com
 https://myaccount.sdworx.com
@@ -695,6 +705,7 @@ https://ravago.demo.huapii.com:8443
 https://ravago.huapii.com
 https://read.sdworx.com
 https://readme.test.huapii.com
+https://rita.staging.huapii.com
 https://road.huapii.com
 https://s3zsdm6tq2rb.dpgmedia.huapii.com
 https://s3zsdm6tq2rb.dpgmedia.huapii.com:8443
@@ -741,12 +752,14 @@ https://skillhunt.huapii.com
 https://smartocr.sdworx.com
 https://solifaction.huapii.com
 https://spain.huapii.com
+https://sparc.demo.huapii.com
 https://sparc.dev.huapii.com
 https://sparc.huapii.com
 https://sparc.staging.huapii.com
 https://sparc.test.huapii.com
 https://staffing-cms.prd.sdworx.com
 https://staffingjobs.sdworx.com
+https://staging.huapii.com
 https://survey.sdworx.com
 https://tags.sdworx.com
 https://talenthunt.huapii.com
@@ -754,10 +767,12 @@ https://telenet-uat.huapii.com
 https://telenet.huapii.com
 https://test.huapii.com
 https://test.sdworx.co.uk
+https://tomorrowland.huapii.com
 https://trainings.sdworx.de
 https://tryout.huapii.com
 https://uk1.huapii.com
 https://uk1.test.huapii.com
+https://ukone.test.huapii.com
 https://unleashsdk.huapii.com
 https://uplearning.sdworx.com
 https://uplearning.sdworx.com:8443
@@ -779,6 +794,7 @@ https://whm.huapii.com:8443
 https://wicreations.huapii.com
 https://www.admin.huapii.com
 https://www.admin.huapii.com:8443
+https://www.heli.sdworx.nl
 https://www.huapii.com
 https://www.huapii.com:8443
 https://www.myworkandme.com
