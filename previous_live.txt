@@ -91,7 +91,6 @@ http://connector-docs.hr.acc.sdworx.com
 http://connector-docs.hr.dev.sdworx.com
 http://connector-docs.hr.devx.sdworx.com
 http://connector-docs.hr.sdworx.com
-http://country-cms.prd.sdworx.com
 http://cpanel.huapii.com
 http://cpanel.huapii.com:8080
 http://demo.huapii.com
@@ -210,7 +209,6 @@ http://kristof.test.huapii.com:8443
 http://learning.sdworx.com
 http://learningfr.sdworx.com
 http://link.staffing.sdworx.com
-http://lms-cms.prd.sdworx.com
 http://login.acc.myworkandme.com
 http://login.acc.sdworx.com
 http://login.hr.acc.sdworx.com
@@ -289,11 +287,6 @@ http://read.sdworx.com
 http://readme.test.huapii.com
 http://readme.test.huapii.com:8080
 http://readme.test.huapii.com:8443
-http://redirect.sdworx.com
-http://redirect.sdworx.com:443
-http://rita.staging.huapii.com
-http://rita.staging.huapii.com:8080
-http://rita.staging.huapii.com:8443
 http://s3zsdm6tq2rb.dpgmedia.huapii.com
 http://s3zsdm6tq2rb.dpgmedia.huapii.com:8080
 http://scs-acc.sdworx.com
@@ -351,7 +344,6 @@ http://sparc.staging.huapii.com:8443
 http://sparc.test.huapii.com
 http://sparc.test.huapii.com:8080
 http://sparc.test.huapii.com:8443
-http://staffing-cms.prd.sdworx.com
 http://staffingjobs.sdworx.com
 http://staging.huapii.com
 http://staging.huapii.com:8080
@@ -524,7 +516,6 @@ https://connector-docs.hr.acc.sdworx.com
 https://connector-docs.hr.dev.sdworx.com
 https://connector-docs.hr.devx.sdworx.com
 https://connector-docs.hr.sdworx.com
-https://country-cms.prd.sdworx.com
 https://cpanel.huapii.com
 https://cpanel.huapii.com:8443
 https://customer-portal.sdworx.com
@@ -638,7 +629,6 @@ https://learningfr.sdworx.com
 https://leonidas.huapii.com
 https://lid-hcm.fidelis.sdworx.de
 https://link.staffing.sdworx.com
-https://lms-cms.prd.sdworx.com
 https://login.acc.myworkandme.com
 https://login.acc.sdworx.com
 https://login.hr.acc.sdworx.com
@@ -715,7 +705,6 @@ https://ravago.demo.huapii.com:8443
 https://ravago.huapii.com
 https://read.sdworx.com
 https://readme.test.huapii.com
-https://rita.staging.huapii.com
 https://road.huapii.com
 https://s3zsdm6tq2rb.dpgmedia.huapii.com
 https://s3zsdm6tq2rb.dpgmedia.huapii.com:8443
@@ -767,7 +756,6 @@ https://sparc.dev.huapii.com
 https://sparc.huapii.com
 https://sparc.staging.huapii.com
 https://sparc.test.huapii.com
-https://staffing-cms.prd.sdworx.com
 https://staffingjobs.sdworx.com
 https://staging.huapii.com
 https://supportconsole.sdworx.co.uk
