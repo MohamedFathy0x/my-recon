@@ -1,4 +1,4 @@
-name: V40 - The Ultimate Radar (Elite Edition)
+name: V41 - The Surgeon (Precision Radar)
 
 on:
   schedule:
@@ -15,10 +15,12 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v4
 
+      # 1. إلغاء الكاش لمنع رسائل التحذير
       - name: Setup Go
         uses: actions/setup-go@v5
         with:
           go-version: '1.21'
+          cache: false
 
       - name: Install Hunting Arsenal
         run: |
@@ -37,13 +39,20 @@ jobs:
           
           rm *.zip
 
-      - name: Define Target Scope (Trimmed & Fixed)
+      # 2. تحديد الـ Scope بدقة (شامل كل الـ Assets المسموحة)
+      - name: Define Precise Scope
         run: |
-          cat <<EOF > scope_raw.txt
+          cat <<EOF > scope.txt
           sdworx.com
+          auth.sdworx.com
+          myaccount.sdworx.com
+          app.sdworx.com
           flexincomeplan.com
           myworkandme.com
           huapii.com
+          sparc.huapii.com
+          skillhunt.huapii.com
+          talenthunt.huapii.com
           sdworx.be
           sdworx.cz
           sdworx.dk
@@ -67,11 +76,11 @@ jobs:
           sdworx.se
           sdworx.co.uk
           EOF
-          # سحر الهاكرز: إزالة كل المسافات الزائدة من البداية والنهاية
-          sed 's/^[ \t]*//;s/[ \t]*$//' scope_raw.txt > scope.txt
+          # تنظيف المسافات
+          sed -i 's/^[ \t]*//;s/[ \t]*$//' scope.txt
           echo "✅ Scope loaded. Base domains: $(wc -l < scope.txt)"
 
-      - name: Triple-Threat Subdomain Enumeration (Timeout Protected)
+      - name: Triple-Threat Enumeration (Timeout Protected)
         env:
           GITHUB_TOKEN: ${{ secrets.GH_PAT }}
           CHAOS_KEY: ${{ secrets.CHAOS_KEY }}
@@ -81,21 +90,26 @@ jobs:
           subfinder -dL scope.txt -all -silent -o sub1.txt || true
           cat scope.txt | assetfinder --subs-only > sub2.txt || true
           
-          # إضافة --max-time 20 لتجنب التجمد
           cat scope.txt | while read domain; do
             curl -s --max-time 20 "https://crt.sh/?q=%25.$domain&output=json" | jq -r '.[].name_value' 2>/dev/null >> sub3.txt || true
           done
           
           cat scope.txt sub1.txt sub2.txt sub3.txt | tr '[:upper:]' '[:lower:]' | sed 's/\*\.//g' | sort -u > unique_subs.txt
 
-      - name: Check Alive Domains (Expanded Ports & Strict Stealth)
+      # 3. الفحص الحي + الفلترة النهائية للتأكد من الـ Scope
+      - name: Check Alive & Filter (Strict 5 req/sec)
         run: |
-          # إضافة بورتات الـ Staging الشهيرة، هيدر وهمي، مع الالتزام الصارم بقانون 5 طلبات/ثانية
+          # فحص البورتات الأساسية والخاصة بالـ Staging
           httpx -l unique_subs.txt -silent \
             -p 80,443,8080,8443,8081,9000,9443 \
             -H "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120.0.0.0" \
             -rl 5 -t 5 \
-            -o current_live.txt
+            -o current_live_raw.txt
+          
+          # أهم خطوة: التأكد إن الدومين اللي طلع موجود جوه الـ Scope بتاعنا
+          touch current_live.txt
+          # بنستخدم grep عشان ناخد بس السطور اللي بتطابق نهايات ملف scope.txt
+          grep -Ff scope.txt current_live_raw.txt > current_live.txt || true
           
           sort -u current_live.txt -o current_live.txt
 
@@ -109,30 +123,33 @@ jobs:
           NEW_COUNT=$(wc -l < new_domains.txt)
           echo "NEW_COUNT=$NEW_COUNT" >> $GITHUB_ENV
 
-      - name: Send Telegram Alert (Bulletproof & Formatted)
+      # 4. التبليغ بملف مرفق (الحل الجذري)
+      - name: Send Telegram File Alert
         if: always()
         env:
           TG_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
           TG_CHAT: ${{ secrets.TELEGRAM_CHAT_ID }}
         run: |
           if [ "${{ env.NEW_COUNT }}" -gt "0" ]; then
-            DOMAINS_LIST=$(head -n 15 new_domains.txt | sed 's/^/✅ `/; s/$/`/')
             
-            if [ "${{ env.NEW_COUNT }}" -gt "15" ]; then
-              DOMAINS_LIST="$DOMAINS_LIST\n\n... and more! Check GitHub Repo."
-            fi
+            MSG="🚨 *SD Worx Radar Alert!*
+            🎯 Found ${NEW_COUNT} NEW targets.
+            📂 Full list attached below."
             
-            echo -e "🌐 *SD Worx Radar Hit!*\n🎯 New Alive Targets: ${{ env.NEW_COUNT }}\n\n$DOMAINS_LIST" > message.txt
-            MSG=$(cat message.txt)
-            
+            # 1. رسالة تنبيه
             curl -s -X POST "https://api.telegram.org/bot$TG_TOKEN/sendMessage" \
               -d chat_id="$TG_CHAT" \
               --data-urlencode text="$MSG" \
               -d parse_mode="Markdown"
-          else
-            echo -e "✅ *SD Worx Radar Finished.*\nStatus: Clean (No new targets today)." > message.txt
-            MSG=$(cat message.txt)
             
+            # 2. إرسال الملف (Document)
+            curl -s -X POST "https://api.telegram.org/bot$TG_TOKEN/sendDocument" \
+              -F chat_id="$TG_CHAT" \
+              -F document=@new_domains.txt \
+              -F caption="📄 Full New Domains List ($(date +%F))"
+              
+          else
+            MSG="✅ *Radar Clean.* No new targets today."
             curl -s -X POST "https://api.telegram.org/bot$TG_TOKEN/sendMessage" \
               -d chat_id="$TG_CHAT" \
               --data-urlencode text="$MSG" \
@@ -153,6 +170,6 @@ jobs:
           if git diff --staged --quiet; then
             echo "No memory changes"
           else
-            git commit -m "Radar Update: Baseline adjusted with expanded ports"
+            git commit -m "Radar Update: Cleaned scope baseline"
             git push
           fi
