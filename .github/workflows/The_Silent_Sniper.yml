@@ -1,149 +1,105 @@
-name: V34 - The Silent Sniper (Anti-Crash)
+name: V45 - The Night Hunter (Full Spectrum)
 
 on:
-  workflow_dispatch:
-    inputs:
-      target:
-        description: 'Enter Exact Target URL (e.g., http://testphp.vulnweb.com/login.php)'
-        required: true
+  schedule:
+    - cron: '0 6 * * *' # يعمل يومياً الساعة 6 صباحاً
+  workflow_dispatch:    # زرار التشغيل اليدوي
 
 jobs:
-  sniper-job:
+  hunter-job:
     runs-on: ubuntu-latest
-    timeout-minutes: 45 
-    
+    permissions:
+      contents: read # بيقرا بس، مش محتاج يعدل في الملفات
+
     steps:
-      # 1. بيئة العمل (زي ما هي شغالة تمام)
-      - name: Setup Go Environment
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      # 1. تجهيز البيئة (بدون كاش لتجنب المشاكل)
+      - name: Setup Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.24'
+          go-version: '1.21'
+          cache: false
 
-      # 2. تثبيت الأدوات (تمام)
-      - name: Install Stealth Arsenal
+      # 2. تثبيت القناص (Nuclei)
+      - name: Install Nuclei
         run: |
-          echo "🛠️ Installing tools..."
-          go install -v github.com/lc/gau/v2/cmd/gau@latest
-          go install -v github.com/projectdiscovery/katana/cmd/katana@latest
-          go install -v github.com/Emoe/kxss@latest
-          go install -v github.com/hahwul/dalfox/v2@latest
-          sudo apt-get update && sudo apt-get install -y jq
+          sudo apt-get update && sudo apt-get install -y jq curl
+          
+          # تثبيت آخر نسخة من Nuclei
+          go install -v github.com/projectdiscovery/nuclei/v3/cmd/nuclei@latest
+          
+          # تحديث قاعدة بيانات الثغرات (Templates) لآخر لحظة
+          ~/go/bin/nuclei -update-templates
 
-      # 3. الاستطلاع (زي ما هو)
-      - name: 1. Surgical Recon (Parameters)
+      # 3. الفحص الشامل (Low -> Critical)
+      - name: Run Full Vulnerability Scan
         run: |
-          TARGET="${{ inputs.target }}"
-          echo "🎯 Locking on target: $TARGET"
-          touch gau_urls.txt katana_urls.txt all_params.txt
+          # التأكد إن ملف الأهداف موجود
+          if [ ! -f previous_live.txt ]; then
+            echo "⚠️ No target file found form Radar. Skipping scan."
+            exit 0
+          fi
           
-          echo "⏳ Fetching archived URLs..."
-          gau "$TARGET" --threads 2 --blacklist png,jpg,gif,css,js,woff,svg,pdf,ico | grep "=" > gau_urls.txt || true
+          echo "🚀 Starting Full Scan on SD Worx Targets..."
           
-          echo "🕷️ Crawling live URLs..."
-          katana -u "$TARGET" -c 2 -d 3 -kf all -s quiet -f qurl | grep "=" > katana_urls.txt || true
+          # إعدادات القنص الدقيق:
+          # -severity: ضفنا low بناءً على طلبك
+          # -rl 5: السرعة القانونية
+          # -bs 2: لتقليل الضغط
+          # -etags: بنستبعد ثغرات الـ Network العشوائية عشان نركز في الويب
           
-          cat gau_urls.txt katana_urls.txt | sort -u > all_params.txt
+          ~/go/bin/nuclei -l previous_live.txt \
+            -rl 5 -bs 2 -c 2 \
+            -severity low,medium,high,critical \
+            -je results.json \
+            -silent
           
-          COUNT=$(wc -l < all_params.txt)
-          echo "✅ Total Parameters Found: $COUNT"
-          
-          if [ "$COUNT" -gt 500 ]; then
-            echo "⚠️ Trimming list to top 500..."
-            head -n 500 all_params.txt > temp_params.txt && mv temp_params.txt all_params.txt
+          # تنسيق التقرير ليكون سهل القراءة في الملف
+          # الشكل هيكون: [Severity] Name -> URL
+          if [ -f results.json ]; then
+            cat results.json | jq -r '"[" + .info.severity + "] " + .info.name + " | " + .matched_at' > hunter_report.txt
           fi
 
-      # 4. الفلترة
-      - name: 2. Reflection Check
-        run: |
-          echo "✨ Checking for reflections..."
-          touch targets_ready.txt kxss_out.txt
-          if [ -s all_params.txt ]; then
-            cat all_params.txt | kxss > kxss_out.txt || true
-            awk '{print $9}' kxss_out.txt > targets_ready.txt || true
-          fi
-          echo "🎯 Reflected Params: $(wc -l < targets_ready.txt)"
-
-      # 5. الهجوم (تم التعديل لمنع الانهيار) 🛡️
-      - name: 3. Exploitation (Stable Mode)
-        run: |
-          echo "🚀 Starting DalFox..."
-          # بنعمل ملفين: واحد JSON وواحد Text احتياطي
-          touch dalfox_results.json dalfox_log.txt
-          
-          # أهم تعديل: --skip-mining-dom
-          # ده بيمنع فتح المتصفح التقيل اللي بيعمل Crash
-          
-          if [ -s targets_ready.txt ]; then
-             dalfox file targets_ready.txt \
-             --delay 1000 \
-             --worker 2 \
-             --skip-bav \
-             --skip-mining-dom \
-             --user-agent "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36" \
-             --format json -o dalfox_results.json > dalfox_log.txt 2>&1 || true
-             
-          elif [ -s all_params.txt ]; then
-             echo "⚠️ No reflections found. Trying fallback scan..."
-             head -n 30 all_params.txt | dalfox pipe \
-             --delay 1500 \
-             --worker 1 \
-             --skip-bav \
-             --skip-mining-dom \
-             --format json -o dalfox_results.json > dalfox_log.txt 2>&1 || true
-          fi
-
-      # 6. التبليغ (المدرع - بيشتغل حتى لو الملف بايظ) 🤖
-      - name: Alert System
+      # 4. إرسال التقرير (ملف)
+      - name: Send Telegram Report
         if: always()
         env:
           TG_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
           TG_CHAT: ${{ secrets.TELEGRAM_CHAT_ID }}
         run: |
-          TARGET="${{ inputs.target }}"
-          
-          # 1. محاولة قراءة الـ JSON (لو سليم)
-          if jq -e . dalfox_results.json >/dev/null 2>&1; then
-            # JSON سليم -> ابعت التفاصيل
-            cat dalfox_results.json | jq -c '.' | while read line; do
-              TYPE=$(echo $line | jq -r '.type')
-              SEVERITY=$(echo $line | jq -r '.severity')
-              PAYLOAD=$(echo $line | jq -r '.payload')
-              URL=$(echo $line | jq -r '.url')
-              
-              MSG="🎯 **SNIPER HIT!**
-              🌐 Target: \`$TARGET\`
-              🐛 Bug: $TYPE ($SEVERITY)
-              💣 Payload: \`$PAYLOAD\`
-              🔗 URL: \`$URL\`"
-              
-              curl -s -X POST "https://api.telegram.org/bot$TG_TOKEN/sendMessage" -d chat_id="$TG_CHAT" -d text="$MSG" -d parse_mode="Markdown"
-              sleep 2
-            done
+          # لو الملف موجود وفيه داتا
+          if [ -s hunter_report.txt ]; then
             
-            # لو الملف سليم بس فاضي (مفيش ثغرات)
-            if [ ! -s dalfox_results.json ]; then
-                 MSG="✅ **Scan Finished (Clean).**
-                 🎯 Target: \`$TARGET\`
-                 🛡️ Status: No Vulnerabilities Found."
-                 curl -s -X POST "https://api.telegram.org/bot$TG_TOKEN/sendMessage" -d chat_id="$TG_CHAT" -d text="$MSG" -d parse_mode="Markdown"
-            fi
+            COUNT=$(wc -l < hunter_report.txt)
             
-          # 2. لو الـ JSON بايظ (حصل Crash) -> ابعت ملف اللوج العادي
+            MSG="🔥 *Hunter Mission Complete!*
+            🎯 Targets Scanned: $(wc -l < previous_live.txt)
+            💣 Vulnerabilities Found: ${COUNT}
+            (Including Low, Medium, High, Critical)
+            
+            📂 *Detailed report attached below.*"
+            
+            # 1. إرسال رسالة التلخيص
+            curl -s -X POST "https://api.telegram.org/bot$TG_TOKEN/sendMessage" \
+              -d chat_id="$TG_CHAT" \
+              --data-urlencode text="$MSG" \
+              -d parse_mode="Markdown"
+            
+            # 2. إرسال ملف الثغرات الكامل
+            curl -s -X POST "https://api.telegram.org/bot$TG_TOKEN/sendDocument" \
+              -F chat_id="$TG_CHAT" \
+              -F document=@hunter_report.txt \
+              -F caption="📄 Hunter Report ($(date +%F))"
+              
           else
-            echo "⚠️ JSON corrupted. Sending raw log summary."
+            # لو مفيش ثغرات خالص
+            MSG="🛡️ *Hunter Finished.*
+            Status: Clean. No vulnerabilities found today."
             
-            # بندور على كلمة "Vulnerable" في اللوج النصي
-            if grep -q "\[POC\]" dalfox_log.txt; then
-                grep "\[POC\]" dalfox_log.txt | head -n 5 | while read line; do
-                    MSG="🔥 **CRASH RECOVERY HIT!**
-                    Dalfox crashed but found this before dying:
-                    \`$line\`"
-                    curl -s -X POST "https://api.telegram.org/bot$TG_TOKEN/sendMessage" -d chat_id="$TG_CHAT" -d text="$MSG" -d parse_mode="Markdown"
-                done
-            else
-                MSG="⚠️ **Scan Finished with Errors.**
-                Dalfox exited unexpectedly or found nothing.
-                Target: \`$TARGET\`"
-                curl -s -X POST "https://api.telegram.org/bot$TG_TOKEN/sendMessage" -d chat_id="$TG_CHAT" -d text="$MSG" -d parse_mode="Markdown"
-            fi
+            curl -s -X POST "https://api.telegram.org/bot$TG_TOKEN/sendMessage" \
+              -d chat_id="$TG_CHAT" \
+              --data-urlencode text="$MSG" \
+              -d parse_mode="Markdown"
           fi
