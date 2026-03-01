@@ -1,4 +1,4 @@
-name: V60 - The Armored Hunter (Full Power)
+name: V62 - The Compiler Army (Full Source Build)
 
 on:
   schedule:
@@ -21,30 +21,27 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v4
 
-      # 1. تثبيت Go (الأساس)
+      # 1. تجهيز بيئة Go (بدون كاش عشان التحميل يبان كامل)
       - name: Setup Go Environment
         uses: actions/setup-go@v5
         with:
           go-version: '1.21'
           cache: false
 
-      # 2. التثبيت "الشرعي" والكامل (The Official Way)
-      # هنا هنستخدم pdtm وده الطريقة اللي المحترفين بيستخدموها لضمان التحديث والقوة
-      - name: Install Nuclei (Enterprise Grade)
+      # 2. التثبيت من المصدر (الطريقة اللي بتنزل 2320 سطر)
+      - name: Install Nuclei from Source (Full Build)
         run: |
-          sudo apt-get update && sudo apt-get install -y jq curl parallel wget unzip libpcap-dev
+          # تثبيت مكتبات النظام الضرورية
+          sudo apt-get update && sudo apt-get install -y jq curl parallel libpcap-dev bind9-host
           
-          echo "🛠️ Installing PDTM (ProjectDiscovery Tool Manager)..."
-          go install -v github.com/projectdiscovery/pdtm/cmd/pdtm@latest
-          
-          echo "🛠️ Installing Nuclei via PDTM (Ensuring Latest Architecture)..."
-          pdtm -install -i nuclei
+          echo "🏗️ Building Nuclei from Source (This will generate logs)..."
+          # -v: Verbose output (عشان تشوف كل سطر بيتبني)
+          go install -v github.com/projectdiscovery/nuclei/v3/cmd/nuclei@latest
           
           # نقل الأداة للمسار العام
-          sudo cp ~/.pdtm/go/bin/nuclei /usr/local/bin/
+          sudo cp ~/go/bin/nuclei /usr/local/bin/
           
-          echo "🌐 Installing Headless Browser Dependencies (For Deep Scanning)..."
-          # الخطوة دي هي اللي بتنقص في الـ Binary العادي، هنا ضفناها عشان القوة القصوى
+          echo "🌐 Installing Headless Browser (Chrome) for Deep XSS Scanning..."
           nuclei -install-headless-browser
           
           echo "✅ Verification:"
@@ -66,9 +63,9 @@ jobs:
           tail -n +$START_LINE previous_live.txt | head -n $LINES_PER_SHARD > target_shard.txt
           
           DOMAIN_COUNT=$(wc -l < target_shard.txt)
-          echo "🐜 Unit #${{ matrix.shard }} Engaging $DOMAIN_COUNT targets..."
+          echo "🐜 Unit #${{ matrix.shard }} compiling attack on $DOMAIN_COUNT targets..."
 
-          # الفحص الشامل
+          # الفحص الشامل (Low -> Critical)
           nuclei -l target_shard.txt \
             -rl 5 -bs 2 -c 2 \
             -severity low,medium,high,critical \
@@ -89,7 +86,7 @@ jobs:
           if [ -s findings.txt ]; then
             COUNT=$(wc -l < findings.txt)
             
-            MSG="🐜 *Armored Unit Hit! (#${{ matrix.shard }})*
+            MSG="🐜 *Compiler Unit Hit! (#${{ matrix.shard }})*
             🎯 Scanned: $(wc -l < target_shard.txt) domains
             💣 Found: ${COUNT} Vulnerabilities
             
