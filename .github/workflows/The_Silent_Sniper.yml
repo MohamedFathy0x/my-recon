@@ -1,105 +1,94 @@
-name: V45 - The Night Hunter (Full Spectrum)
+name: V50 - The Wolf Pack (Parallel Hunter)
 
 on:
   schedule:
-    - cron: '0 6 * * *' # يعمل يومياً الساعة 6 صباحاً
-  workflow_dispatch:    # زرار التشغيل اليدوي
+    - cron: '0 6 * * *'
+  workflow_dispatch:
 
 jobs:
   hunter-job:
     runs-on: ubuntu-latest
     permissions:
-      contents: read # بيقرا بس، مش محتاج يعدل في الملفات
+      contents: read
+    
+    # استراتيجية المصفوفة: تشغيل 5 نسخ من الوظيفة في نفس الوقت
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4, 5] # عدد الأجزاء (ممكن تزودهم لحد 20 لو العدد كبر جداً)
+        total_shards: [5]      # لازم يكون نفس عدد الأجزاء اللي فوق
 
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
 
-      # 1. تجهيز البيئة (بدون كاش لتجنب المشاكل)
       - name: Setup Go
         uses: actions/setup-go@v5
         with:
           go-version: '1.21'
           cache: false
 
-      # 2. تثبيت القناص (Nuclei)
-      - name: Install Nuclei
+      - name: Install Nuclei & Tools
         run: |
-          sudo apt-get update && sudo apt-get install -y jq curl
-          
-          # تثبيت آخر نسخة من Nuclei
+          sudo apt-get update && sudo apt-get install -y jq curl parallel
           go install -v github.com/projectdiscovery/nuclei/v3/cmd/nuclei@latest
-          
-          # تحديث قاعدة بيانات الثغرات (Templates) لآخر لحظة
           ~/go/bin/nuclei -update-templates
 
-      # 3. الفحص الشامل (Low -> Critical)
-      - name: Run Full Vulnerability Scan
+      - name: Split Targets & Scan (Shard ${{ matrix.shard }}/${{ matrix.total_shards }})
         run: |
-          # التأكد إن ملف الأهداف موجود
           if [ ! -f previous_live.txt ]; then
-            echo "⚠️ No target file found form Radar. Skipping scan."
+            echo "⚠️ No targets found."
             exit 0
           fi
+
+          # تقسيم الملف بناءً على رقم الـ Shard الحالي
+          # المعادلة دي بتخلي كل جهاز ياخد مجموعة فريدة من الدومينات
+          TOTAL_LINES=$(wc -l < previous_live.txt)
+          LINES_PER_SHARD=$(( ($TOTAL_LINES + ${{ matrix.total_shards }} - 1) / ${{ matrix.total_shards }} ))
+          START_LINE=$(( (${{ matrix.shard }} - 1) * $LINES_PER_SHARD + 1 ))
           
-          echo "🚀 Starting Full Scan on SD Worx Targets..."
+          # استخراج الجزء الخاص بالجهاز ده
+          tail -n +$START_LINE previous_live.txt | head -n $LINES_PER_SHARD > target_shard.txt
           
-          # إعدادات القنص الدقيق:
-          # -severity: ضفنا low بناءً على طلبك
-          # -rl 5: السرعة القانونية
-          # -bs 2: لتقليل الضغط
-          # -etags: بنستبعد ثغرات الـ Network العشوائية عشان نركز في الويب
-          
-          ~/go/bin/nuclei -l previous_live.txt \
+          echo "🐺 Wolf #${{ matrix.shard }}: Hunting on $(wc -l < target_shard.txt) domains..."
+
+          # الفحص بنفس الإعدادات الآمنة
+          ~/go/bin/nuclei -l target_shard.txt \
             -rl 5 -bs 2 -c 2 \
             -severity low,medium,high,critical \
-            -je results.json \
-            -silent
-          
-          # تنسيق التقرير ليكون سهل القراءة في الملف
-          # الشكل هيكون: [Severity] Name -> URL
-          if [ -f results.json ]; then
-            cat results.json | jq -r '"[" + .info.severity + "] " + .info.name + " | " + .matched_at' > hunter_report.txt
+            -timeout 5 \
+            -je results_shard.json \
+            -silent || true
+
+          # تحويل النتايج لملف نصي
+          if [ -f results_shard.json ]; then
+            cat results_shard.json | jq -r '"[" + .info.severity + "] " + .info.name + " | " + .matched_at' > findings.txt
           fi
 
-      # 4. إرسال التقرير (ملف)
-      - name: Send Telegram Report
+      - name: Send Report (If Vulnerabilities Found)
         if: always()
         env:
           TG_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
           TG_CHAT: ${{ secrets.TELEGRAM_CHAT_ID }}
         run: |
-          # لو الملف موجود وفيه داتا
-          if [ -s hunter_report.txt ]; then
+          if [ -s findings.txt ]; then
+            COUNT=$(wc -l < findings.txt)
             
-            COUNT=$(wc -l < hunter_report.txt)
+            MSG="🐺 *Wolf Pack Hit! (Shard ${{ matrix.shard }})*
+            🎯 Scanned: $(wc -l < target_shard.txt) targets
+            💣 Found: ${COUNT} Vulnerabilities
             
-            MSG="🔥 *Hunter Mission Complete!*
-            🎯 Targets Scanned: $(wc -l < previous_live.txt)
-            💣 Vulnerabilities Found: ${COUNT}
-            (Including Low, Medium, High, Critical)
+            📂 *Partial report attached.*"
             
-            📂 *Detailed report attached below.*"
-            
-            # 1. إرسال رسالة التلخيص
             curl -s -X POST "https://api.telegram.org/bot$TG_TOKEN/sendMessage" \
               -d chat_id="$TG_CHAT" \
               --data-urlencode text="$MSG" \
               -d parse_mode="Markdown"
             
-            # 2. إرسال ملف الثغرات الكامل
             curl -s -X POST "https://api.telegram.org/bot$TG_TOKEN/sendDocument" \
               -F chat_id="$TG_CHAT" \
-              -F document=@hunter_report.txt \
-              -F caption="📄 Hunter Report ($(date +%F))"
-              
+              -F document=@findings.txt \
+              -F caption="📄 Report Shard ${{ matrix.shard }}"
           else
-            # لو مفيش ثغرات خالص
-            MSG="🛡️ *Hunter Finished.*
-            Status: Clean. No vulnerabilities found today."
-            
-            curl -s -X POST "https://api.telegram.org/bot$TG_TOKEN/sendMessage" \
-              -d chat_id="$TG_CHAT" \
-              --data-urlencode text="$MSG" \
-              -d parse_mode="Markdown"
+            echo "✅ Shard ${{ matrix.shard }} is clean."
           fi
