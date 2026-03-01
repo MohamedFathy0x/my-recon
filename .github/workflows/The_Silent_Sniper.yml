@@ -1,4 +1,4 @@
-name: V55 - The Army (Massive Parallel Hunter)
+name: V56 - The Unstoppable Army (Fixed)
 
 on:
   schedule:
@@ -11,7 +11,6 @@ jobs:
     permissions:
       contents: read
     
-    # التغيير الجذري: زيادة المصفوفة لـ 20 عملية (الحد الأقصى)
     strategy:
       fail-fast: false
       matrix:
@@ -22,18 +21,22 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v4
 
-      - name: Setup Go
-        uses: actions/setup-go@v5
-        with:
-          go-version: '1.21'
-          cache: false
-
-      - name: Install Nuclei & Tools
+      # 1. تثبيت Nuclei بطريقة مباشرة (Binary) لتجنب مشاكل الـ Go
+      - name: Install Nuclei (Stable Binary)
         run: |
-          sudo apt-get update && sudo apt-get install -y jq curl parallel
-          go install -v github.com/projectdiscovery/nuclei/v3/cmd/nuclei@latest
-          ~/go/bin/nuclei -update-templates
+          sudo apt-get update && sudo apt-get install -y jq curl parallel wget unzip
+          
+          # تنزيل أحدث نسخة Release رسمية
+          wget -q https://github.com/projectdiscovery/nuclei/releases/download/v3.2.9/nuclei_3.2.9_linux_amd64.zip
+          unzip -o -q nuclei_3.2.9_linux_amd64.zip
+          sudo mv nuclei /usr/local/bin/
+          rm nuclei_3.2.9_linux_amd64.zip
+          
+          # التأكد من الإصدار
+          nuclei -version
+          nuclei -update-templates
 
+      # 2. التقسيم والفحص (بدون الأمر المسبب للمشكلة)
       - name: Split Targets & Scan (Unit ${{ matrix.shard }}/${{ matrix.total_shards }})
         run: |
           if [ ! -f previous_live.txt ]; then
@@ -41,7 +44,7 @@ jobs:
             exit 0
           fi
 
-          # تقسيم الملف على 20 جزء
+          # معادلة التقسيم
           TOTAL_LINES=$(wc -l < previous_live.txt)
           LINES_PER_SHARD=$(( ($TOTAL_LINES + ${{ matrix.total_shards }} - 1) / ${{ matrix.total_shards }} ))
           START_LINE=$(( (${{ matrix.shard }} - 1) * $LINES_PER_SHARD + 1 ))
@@ -49,15 +52,13 @@ jobs:
           tail -n +$START_LINE previous_live.txt | head -n $LINES_PER_SHARD > target_shard.txt
           
           DOMAIN_COUNT=$(wc -l < target_shard.txt)
-          echo "🐜 Army Unit #${{ matrix.shard }}: Handling $DOMAIN_COUNT domains..."
+          echo "🐜 Army Unit #${{ matrix.shard }}: Hunting on $DOMAIN_COUNT domains..."
 
-          # الفحص مع إضافة حد أقصى للوقت (Graceful Exit)
-          # -max-duration 5h45m: يوقف الفحص قبل ما جيت هب يقفله بـ ربع ساعة
-          ~/go/bin/nuclei -l target_shard.txt \
+          # الفحص بالإعدادات القياسية (شيلنا -max-duration)
+          nuclei -l target_shard.txt \
             -rl 5 -bs 2 -c 2 \
             -severity low,medium,high,critical \
             -timeout 5 \
-            -max-duration 5h45m \
             -je results_shard.json \
             -silent || true
 
@@ -65,6 +66,7 @@ jobs:
             cat results_shard.json | jq -r '"[" + .info.severity + "] " + .info.name + " | " + .matched_at' > findings.txt
           fi
 
+      # 3. التبليغ
       - name: Send Report
         if: always()
         env:
