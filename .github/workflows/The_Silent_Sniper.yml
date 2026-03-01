@@ -1,4 +1,4 @@
-name: V50 - The Wolf Pack (Parallel Hunter)
+name: V55 - The Army (Massive Parallel Hunter)
 
 on:
   schedule:
@@ -11,12 +11,12 @@ jobs:
     permissions:
       contents: read
     
-    # استراتيجية المصفوفة: تشغيل 5 نسخ من الوظيفة في نفس الوقت
+    # التغيير الجذري: زيادة المصفوفة لـ 20 عملية (الحد الأقصى)
     strategy:
       fail-fast: false
       matrix:
-        shard: [1, 2, 3, 4, 5] # عدد الأجزاء (ممكن تزودهم لحد 20 لو العدد كبر جداً)
-        total_shards: [5]      # لازم يكون نفس عدد الأجزاء اللي فوق
+        shard: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20]
+        total_shards: [20]
 
     steps:
       - name: Checkout Repository
@@ -34,38 +34,38 @@ jobs:
           go install -v github.com/projectdiscovery/nuclei/v3/cmd/nuclei@latest
           ~/go/bin/nuclei -update-templates
 
-      - name: Split Targets & Scan (Shard ${{ matrix.shard }}/${{ matrix.total_shards }})
+      - name: Split Targets & Scan (Unit ${{ matrix.shard }}/${{ matrix.total_shards }})
         run: |
           if [ ! -f previous_live.txt ]; then
             echo "⚠️ No targets found."
             exit 0
           fi
 
-          # تقسيم الملف بناءً على رقم الـ Shard الحالي
-          # المعادلة دي بتخلي كل جهاز ياخد مجموعة فريدة من الدومينات
+          # تقسيم الملف على 20 جزء
           TOTAL_LINES=$(wc -l < previous_live.txt)
           LINES_PER_SHARD=$(( ($TOTAL_LINES + ${{ matrix.total_shards }} - 1) / ${{ matrix.total_shards }} ))
           START_LINE=$(( (${{ matrix.shard }} - 1) * $LINES_PER_SHARD + 1 ))
           
-          # استخراج الجزء الخاص بالجهاز ده
           tail -n +$START_LINE previous_live.txt | head -n $LINES_PER_SHARD > target_shard.txt
           
-          echo "🐺 Wolf #${{ matrix.shard }}: Hunting on $(wc -l < target_shard.txt) domains..."
+          DOMAIN_COUNT=$(wc -l < target_shard.txt)
+          echo "🐜 Army Unit #${{ matrix.shard }}: Handling $DOMAIN_COUNT domains..."
 
-          # الفحص بنفس الإعدادات الآمنة
+          # الفحص مع إضافة حد أقصى للوقت (Graceful Exit)
+          # -max-duration 5h45m: يوقف الفحص قبل ما جيت هب يقفله بـ ربع ساعة
           ~/go/bin/nuclei -l target_shard.txt \
             -rl 5 -bs 2 -c 2 \
             -severity low,medium,high,critical \
             -timeout 5 \
+            -max-duration 5h45m \
             -je results_shard.json \
             -silent || true
 
-          # تحويل النتايج لملف نصي
           if [ -f results_shard.json ]; then
             cat results_shard.json | jq -r '"[" + .info.severity + "] " + .info.name + " | " + .matched_at' > findings.txt
           fi
 
-      - name: Send Report (If Vulnerabilities Found)
+      - name: Send Report
         if: always()
         env:
           TG_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
@@ -74,11 +74,11 @@ jobs:
           if [ -s findings.txt ]; then
             COUNT=$(wc -l < findings.txt)
             
-            MSG="🐺 *Wolf Pack Hit! (Shard ${{ matrix.shard }})*
-            🎯 Scanned: $(wc -l < target_shard.txt) targets
+            MSG="🐜 *Army Unit Hit! (#${{ matrix.shard }})*
+            🎯 Scanned: $(wc -l < target_shard.txt) domains
             💣 Found: ${COUNT} Vulnerabilities
             
-            📂 *Partial report attached.*"
+            📂 *Report attached.*"
             
             curl -s -X POST "https://api.telegram.org/bot$TG_TOKEN/sendMessage" \
               -d chat_id="$TG_CHAT" \
@@ -88,7 +88,7 @@ jobs:
             curl -s -X POST "https://api.telegram.org/bot$TG_TOKEN/sendDocument" \
               -F chat_id="$TG_CHAT" \
               -F document=@findings.txt \
-              -F caption="📄 Report Shard ${{ matrix.shard }}"
+              -F caption="📄 Report Unit ${{ matrix.shard }}"
           else
-            echo "✅ Shard ${{ matrix.shard }} is clean."
+            echo "✅ Unit ${{ matrix.shard }} finished clean."
           fi
