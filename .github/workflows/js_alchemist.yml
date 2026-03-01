@@ -1,159 +1,103 @@
-name: V22.2 - Northern.tech Hunter (Final & Verified)
+name: V65 - The Lone Wolf (Source Build + Safe Mode)
 
 on:
   schedule:
-    - cron: '0 */12 * * *' # يشتغل كل 12 ساعة
-  workflow_dispatch:       # تشغيل يدوي
+    - cron: '0 6 * * *'
+  workflow_dispatch:
 
 jobs:
   hunter-job:
     runs-on: ubuntu-latest
     permissions:
-      contents: write # عشان يحفظ الذاكرة
+      contents: read
     
+    # لغينا الـ Strategy Matrix عشان نوفر الرصيد ونحل مشكلة الدفع
     steps:
-      # 1. التثبيت المضمون (مع النقل الصحيح لمسار النظام)
-      - name: Install Tools
-        run: |
-          sudo apt-get update && sudo apt-get install -y coreutils jq wget unzip libpcap-dev
-          
-          # Subfinder
-          wget -q https://github.com/projectdiscovery/subfinder/releases/download/v2.6.6/subfinder_2.6.6_linux_amd64.zip
-          unzip -o -q subfinder_2.6.6_linux_amd64.zip
-          sudo mv subfinder /usr/local/bin/
-
-          # Httpx
-          wget -q https://github.com/projectdiscovery/httpx/releases/download/v1.6.0/httpx_1.6.0_linux_amd64.zip
-          unzip -o -q httpx_1.6.0_linux_amd64.zip
-          sudo mv httpx /usr/local/bin/
-
-          # Nuclei
-          wget -q https://github.com/projectdiscovery/nuclei/releases/download/v3.2.9/nuclei_3.2.9_linux_amd64.zip
-          unzip -o -q nuclei_3.2.9_linux_amd64.zip
-          sudo mv nuclei /usr/local/bin/
-          
-          rm *.zip
-          nuclei -update-templates
-
-      # 2. سحب الذاكرة
-      - name: Checkout Memory
+      - name: Checkout Repository
         uses: actions/checkout@v4
 
-      # 3. تحديد الهدف (Northern.tech Staging Only)
-      - name: Set Target
-        run: echo "TARGET=staging.hosted.mender.io" >> $GITHUB_ENV
+      # 1. التثبيت من المصدر (اللي إنت بتحبه - 2320 سطر)
+      - name: Setup Go & Build Nuclei
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.21'
+          cache: false
 
-      # 4. الاستطلاع (Recon) - تصحيح مكان الهيدر
-      - name: Run Subfinder & Httpx
-        env:
-          GITHUB_TOKEN: ${{ secrets.GH_PAT }}
-          CHAOS_KEY: ${{ secrets.CHAOS_KEY }}
-          SHODAN_API_KEY: ${{ secrets.SHODAN_API_KEY }}
-          SECURITYTRAILS_TOKEN: ${{ secrets.SECURITYTRAILS_TOKEN }}
+      - name: Install Nuclei (Full Compilation Log)
         run: |
-          echo "🔎 Scanning ${{ env.TARGET }}..."
+          sudo apt-get update && sudo apt-get install -y jq curl libpcap-dev bind9-host
           
-          # تجميع الدومينات (بدون هيدر لأنه DNS)
-          subfinder -d ${{ env.TARGET }} -all -silent -o all_subs.txt
-          # إضافة الدومين الأصلي
-          echo "${{ env.TARGET }}" >> all_subs.txt
+          echo "🏗️ Building Nuclei from Source (Enjoy the logs)..."
+          # الأمر ده هيطلعلك آلاف السطور زي ما طلبت
+          go install -v github.com/projectdiscovery/nuclei/v3/cmd/nuclei@latest
           
-          # التعديل: شلنا -mc 200 عشان يقبل أي حاجة (حتى لو 403 Forbidden)
-          # ده هيخلي الدومين الأساسي يظهر حتى لو عليه حماية
-          httpx -l all_subs.txt -silent \
-            -H "X-HackerOne-Research: mohamedfathy0x" \
-            -H "User-Agent: Mozilla/5.0 (Security-Research)" \
-            -rl 10 \
-            -o live_targets.txt
+          sudo cp ~/go/bin/nuclei /usr/local/bin/
           
-          echo "Alive Targets: $(wc -l < live_targets.txt)"
+          # تثبيت المتصفح عشان القوة
+          nuclei -install-headless-browser
+          nuclei -update-templates
+          
+          echo "✅ Nuclei Ready. Version:"
+          nuclei -version
 
-      # 5. الذاكرة (توحيد أسماء الملفات)
-      - name: Diff Logic
+      # 2. الفحص الذكي (جهاز واحد - وقت محدد)
+      - name: Single Wolf Attack
         run: |
-          # التأكد من وجود الملف لتجنب الأخطاء
-          touch previous_memory.txt
+          if [ ! -f previous_live.txt ]; then
+            echo "⚠️ No targets found."
+            exit 0
+          fi
           
-          sort live_targets.txt > current_sorted.txt
-          sort previous_memory.txt > previous_sorted.txt
-          
-          # الجديد
-          comm -23 current_sorted.txt previous_sorted.txt > new_targets.txt
-          # القديم
-          comm -12 current_sorted.txt previous_sorted.txt > old_targets.txt
-          
-          echo "NEW_COUNT=$(wc -l < new_targets.txt)" >> $GITHUB_ENV
-          echo "OLD_COUNT=$(wc -l < old_targets.txt)" >> $GITHUB_ENV
+          DOMAIN_COUNT=$(wc -l < previous_live.txt)
+          echo "🐺 Lone Wolf attacking $DOMAIN_COUNT targets..."
 
-      # 6. هجوم عميق على الجديد
-      - name: Deep Scan (NEW)
-        if: env.NEW_COUNT > 0
-        run: |
-          echo "🔥 Attack on NEW targets..."
-          # -H: الهيدر الخاص بك (مهم جداً)
-          nuclei -l new_targets.txt \
-            -H "X-HackerOne-Research: mohamedfathy0x" \
-            -s critical,high,medium \
-            -rl 10 -bs 2 -c 5 -timeout 10 \
-            -je nuclei_new.json
+          # المعادلة هنا:
+          # -max-duration 5h30m: (مهم جداً) بيجبر الأداة تقف بعد 5 ساعات ونص وتبعت التقرير
+          # عشان مستحيل جيت هب يقفلهولك تاني وتخسر النتايج
+          nuclei -l previous_live.txt \
+            -rl 5 -bs 2 -c 2 \
+            -severity low,medium,high,critical \
+            -timeout 5 \
+            -max-duration 5h30m \
+            -je results.json \
+            -silent || true
 
-      # 7. هجوم خفيف على القديم
-      - name: Light Scan (OLD)
-        if: env.OLD_COUNT > 0
-        run: |
-          echo "🛡️ Monitoring OLD targets..."
-          nuclei -l old_targets.txt \
-            -H "X-HackerOne-Research: mohamedfathy0x" \
-            -tags takeover,cve,exposure \
-            -s critical,high \
-            -rl 10 \
-            -je nuclei_old.json
+          if [ -f results.json ]; then
+            cat results.json | jq -r '"[" + .info.severity + "] " + .info.name + " | " + .matched_at' > findings.txt
+          fi
 
-      # 8. التبليغ (ثغرات فقط) - الطريقة الأضمن للمتغيرات
-      - name: Alert System
+      # 3. التبليغ المضمون
+      - name: Send Report
+        if: always()
         env:
           TG_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
           TG_CHAT: ${{ secrets.TELEGRAM_CHAT_ID }}
         run: |
-          touch nuclei_new.json nuclei_old.json
-          cat nuclei_new.json nuclei_old.json > all_vulns.json
-          
-          if [ -s all_vulns.json ]; then
-            cat all_vulns.json | while read line; do
-              NAME=$(echo $line | jq -r '.info.name')
-              SEVERITY=$(echo $line | jq -r '.info.severity')
-              URL=$(echo $line | jq -r '.matched-at')
-              
-              MSG="🚨 **VULN FOUND (Mender)!**
-              🐛 Bug: $NAME
-              ⚠️ Severity: $SEVERITY
-              🔗 URL: \`$URL\`"
-              
-              # استخدام المتغيرات بطريقة الـ Bash الآمنة
-              curl -s -X POST "https://api.telegram.org/bot$TG_TOKEN/sendMessage" \
+          if [ -s findings.txt ]; then
+            COUNT=$(wc -l < findings.txt)
+            
+            MSG="🐺 *Lone Wolf Report!*
+            ⏳ Scan stopped safely after 5.5 hours.
+            🎯 Total Targets: $(wc -l < previous_live.txt)
+            💣 Vulnerabilities Found: ${COUNT}
+            
+            📂 *Report attached.*"
+            
+            curl -s -X POST "https://api.telegram.org/bot$TG_TOKEN/sendMessage" \
               -d chat_id="$TG_CHAT" \
-              -d text="$MSG" -d parse_mode="Markdown"
-              sleep 1
-            done
+              --data-urlencode text="$MSG" \
+              -d parse_mode="Markdown"
+            
+            curl -s -X POST "https://api.telegram.org/bot$TG_TOKEN/sendDocument" \
+              -F chat_id="$TG_CHAT" \
+              -F document=@findings.txt \
+              -F caption="📄 Daily Lone Wolf Report"
           else
-             echo "✅ Safe. No bugs found on ${{ env.TARGET }}"
-          fi
-
-      # 9. حفظ الذاكرة (توحيد الأسماء)
-      - name: Save Memory
-        run: |
-          git config --global user.name "hunter-bot"
-          git config --global user.email "bot@noreply.com"
-          
-          git pull origin main --rebase || echo "No rebase needed"
-          
-          rm -f previous_memory.txt
-          mv current_sorted.txt previous_memory.txt
-          
-          git add previous_memory.txt
-          if git diff --staged --quiet; then
-            echo "Memory unchanged"
-          else
-            git commit -m "Update Memory for ${{ env.TARGET }}"
-            git push
+            echo "✅ Scan finished (Clean or Time limit reached without findings)."
+            # رسالة اطمئنان إن الكود اشتغل
+             MSG="🐺 *Lone Wolf Finished.* No vulnerabilities found in this run."
+             curl -s -X POST "https://api.telegram.org/bot$TG_TOKEN/sendMessage" \
+              -d chat_id="$TG_CHAT" \
+              --data-urlencode text="$MSG" \
+              -d parse_mode="Markdown"
           fi
