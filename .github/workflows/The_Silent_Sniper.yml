@@ -1,4 +1,4 @@
-name: V62 - The Compiler Army (Full Source Build)
+name: V63 - The Redemption (Source Build + Stable)
 
 on:
   schedule:
@@ -21,34 +21,34 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v4
 
-      # 1. تجهيز بيئة Go (بدون كاش عشان التحميل يبان كامل)
+      # 1. تجهيز بيئة Go (بدون كاش لضمان التحميل الكامل)
       - name: Setup Go Environment
         uses: actions/setup-go@v5
         with:
           go-version: '1.21'
           cache: false
 
-      # 2. التثبيت من المصدر (الطريقة اللي بتنزل 2320 سطر)
+      # 2. التثبيت من المصدر (2320 سطر - Logs)
       - name: Install Nuclei from Source (Full Build)
         run: |
-          # تثبيت مكتبات النظام الضرورية
+          # تثبيت المكتبات اللازمة للبناء
           sudo apt-get update && sudo apt-get install -y jq curl parallel libpcap-dev bind9-host
           
-          echo "🏗️ Building Nuclei from Source (This will generate logs)..."
-          # -v: Verbose output (عشان تشوف كل سطر بيتبني)
+          echo "🏗️ Building Nuclei from Source (Verbose Mode)..."
+          # الأمر ده هو اللي بيطلع السطور الكتير اللي بتأكدلك إن البناء بيتم من الصفر
           go install -v github.com/projectdiscovery/nuclei/v3/cmd/nuclei@latest
           
           # نقل الأداة للمسار العام
           sudo cp ~/go/bin/nuclei /usr/local/bin/
           
-          echo "🌐 Installing Headless Browser (Chrome) for Deep XSS Scanning..."
-          nuclei -install-headless-browser
-          
-          echo "✅ Verification:"
-          nuclei -version
+          # تحديث القوالب فقط (Nuclei هيستخدم كروم الموجود على السيرفر تلقائياً)
+          echo "✅ Updating Templates..."
           nuclei -update-templates
+          
+          echo "✅ Nuclei Version:"
+          nuclei -version
 
-      # 3. التقسيم والفحص
+      # 3. التقسيم والفحص (20 عملية متوازية)
       - name: Split & Attack (Unit ${{ matrix.shard }}/${{ matrix.total_shards }})
         run: |
           if [ ! -f previous_live.txt ]; then
@@ -66,6 +66,7 @@ jobs:
           echo "🐜 Unit #${{ matrix.shard }} compiling attack on $DOMAIN_COUNT targets..."
 
           # الفحص الشامل (Low -> Critical)
+          # شيلنا أي flags ممكن تعمل مشاكل، واعتمدنا على الإعدادات القياسية
           nuclei -l target_shard.txt \
             -rl 5 -bs 2 -c 2 \
             -severity low,medium,high,critical \
@@ -86,7 +87,7 @@ jobs:
           if [ -s findings.txt ]; then
             COUNT=$(wc -l < findings.txt)
             
-            MSG="🐜 *Compiler Unit Hit! (#${{ matrix.shard }})*
+            MSG="🐜 *Source-Build Unit Hit! (#${{ matrix.shard }})*
             🎯 Scanned: $(wc -l < target_shard.txt) domains
             💣 Found: ${COUNT} Vulnerabilities
             
