@@ -1,4 +1,4 @@
-name: V67 - The Infinite Legion (40 Shards - Source Build)
+name: V70 - The Surgical Legion (Med/High/Crit Only)
 
 on:
   schedule:
@@ -14,7 +14,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # التعديل الوحيد هنا: زودنا الأرقام من 1 لـ 40
+        # الجيش مكون من 40 كتيبة
         shard: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40]
         total_shards: [40]
 
@@ -22,59 +22,61 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v4
 
-      # 1. تجهيز بيئة Go (زي ما هي)
-      - name: Setup Go Environment
+      # 1. التثبيت من المصدر (الكود المفضل ليك 2320 سطر)
+      - name: Setup Go & Build Nuclei
         uses: actions/setup-go@v5
         with:
           go-version: '1.21'
           cache: false
 
-      # 2. التثبيت من المصدر (نفس الكود اللي بتحبه بـ 2320 سطر)
       - name: Install Nuclei from Source (Full Build)
         run: |
           sudo apt-get update && sudo apt-get install -y jq curl parallel libpcap-dev bind9-host
           
-          echo "🏗️ Building Nuclei from Source (Verbose Mode)..."
+          echo "🏗️ Building Nuclei from Source..."
           go install -v github.com/projectdiscovery/nuclei/v3/cmd/nuclei@latest
-          
           sudo cp ~/go/bin/nuclei /usr/local/bin/
           
-          echo "✅ Updating Templates..."
+          # تثبيت المتصفح عشان لو في ثغرات XSS معقدة
+          nuclei -install-headless-browser
           nuclei -update-templates
-          
-          echo "✅ Nuclei Version:"
           nuclei -version
 
-      # 3. التقسيم والفحص (40 عملية - حمل خفيف جداً)
-      - name: Split & Attack (Unit ${{ matrix.shard }}/${{ matrix.total_shards }})
+      # 2. الفحص الجراحي (بدون Low)
+      - name: Split & Surgical Attack (Unit ${{ matrix.shard }})
         run: |
           if [ ! -f previous_live.txt ]; then
             echo "⚠️ No targets found."
             exit 0
           fi
 
+          # تقسيم الدومينات
           TOTAL_LINES=$(wc -l < previous_live.txt)
           LINES_PER_SHARD=$(( ($TOTAL_LINES + ${{ matrix.total_shards }} - 1) / ${{ matrix.total_shards }} ))
           START_LINE=$(( (${{ matrix.shard }} - 1) * $LINES_PER_SHARD + 1 ))
-          
           tail -n +$START_LINE previous_live.txt | head -n $LINES_PER_SHARD > target_shard.txt
           
           DOMAIN_COUNT=$(wc -l < target_shard.txt)
-          echo "🐜 Unit #${{ matrix.shard }} compiling attack on $DOMAIN_COUNT targets..."
+          echo "🩺 Surgical Unit #${{ matrix.shard }} examining $DOMAIN_COUNT targets..."
 
-          # نفس إعدادات الفحص بالظبط بدون أي تغيير
+          # --- التعديلات ---
+          # 1. شلنا 'low' من الـ severity عشان نوفر وقت ومجهود
+          # 2. استخدمنا -o findings.txt مباشرة عشان نتفادى خطأ jq المعقد
+          # 3. السرعة 5 req/sec عشان قانون البرنامج
+          
           nuclei -l target_shard.txt \
             -rl 5 -bs 2 -c 2 \
-            -severity low,medium,high,critical \
+            -severity medium,high,critical \
             -timeout 6 \
-            -je results_shard.json \
+            -o results_raw.txt \
             -silent || true
 
-          if [ -f results_shard.json ]; then
-            cat results_shard.json | jq -r '"[" + .info.severity + "] " + .info.name + " | " + .matched_at' > findings.txt
+          # تنسيق النتايج بشكل بسيط وآمن (بدون JSON معقد)
+          if [ -s results_raw.txt ]; then
+             cat results_raw.txt > findings.txt
           fi
 
-      # 4. التبليغ (نفس الكود)
+      # 3. التبليغ
       - name: Send Report
         if: always()
         env:
@@ -84,8 +86,9 @@ jobs:
           if [ -s findings.txt ]; then
             COUNT=$(wc -l < findings.txt)
             
-            MSG="🐜 *Legion Unit Hit! (#${{ matrix.shard }})*
-            🎯 Scanned: $(wc -l < target_shard.txt) domains
+            MSG="🩺 *Surgical Hit! (Unit #${{ matrix.shard }})*
+            🎯 Targets: $(wc -l < target_shard.txt)
+            🔥 Severity: Med/High/Crit
             💣 Found: ${COUNT} Vulnerabilities
             
             📂 *Report attached.*"
@@ -98,7 +101,7 @@ jobs:
             curl -s -X POST "https://api.telegram.org/bot$TG_TOKEN/sendDocument" \
               -F chat_id="$TG_CHAT" \
               -F document=@findings.txt \
-              -F caption="📄 Full Report Unit ${{ matrix.shard }}"
+              -F caption="📄 Critical Report Unit ${{ matrix.shard }}"
           else
             echo "✅ Unit ${{ matrix.shard }} Clean."
           fi
