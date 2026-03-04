@@ -1,4 +1,4 @@
-name: V73 - The Elite Hunter (High/Crit Only)
+name: V75 - The Perfect Rotation (Smart & Safe)
 
 on:
   schedule:
@@ -14,7 +14,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # 40 عملية
+        # 40 عملية (الجيش الثابت)
         shard: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40]
         total_shards: [40]
 
@@ -29,7 +29,7 @@ jobs:
           go-version: '1.21'
           cache: false
 
-      # 2. التثبيت من المصدر (كامل)
+      # 2. التثبيت من المصدر (النسخة الكاملة 2320 سطر)
       - name: Install Nuclei from Source (Full Build)
         run: |
           sudo apt-get update && sudo apt-get install -y jq curl parallel libpcap-dev bind9-host
@@ -45,9 +45,38 @@ jobs:
           echo "✅ Nuclei Version:"
           nuclei -version
 
-      # 3. الفحص النخبة (High + Critical Only)
-      - name: Split & Elite Attack (Unit ${{ matrix.shard }}/${{ matrix.total_shards }})
+      # 3. العقل المدبر: تحديد نوع الفحص لليوم الحالي (بدون أخطاء)
+      - name: Determine Daily Combat Mode
+        id: mode
         run: |
+          # بنجيب رقم اليوم في السنة (تلقائي)
+          # العلامة - عشان يشيل الصفر اللي على الشمال ويمنع مشاكل حسابية
+          DAY_OF_YEAR=$(date +%-j)
+          
+          # باقي القسمة على 4
+          ROTATION=$(( $DAY_OF_YEAR % 4 ))
+          
+          if [ "$ROTATION" -eq 0 ]; then
+            echo "TODAY_SEVERITY=critical" >> $GITHUB_ENV
+            echo "MODE_MSG=🔥 DOOMSDAY (CRITICAL)" >> $GITHUB_ENV
+          elif [ "$ROTATION" -eq 1 ]; then
+            echo "TODAY_SEVERITY=high" >> $GITHUB_ENV
+            echo "MODE_MSG=⚔️ HEAVY ASSAULT (HIGH)" >> $GITHUB_ENV
+          elif [ "$ROTATION" -eq 2 ]; then
+            echo "TODAY_SEVERITY=medium" >> $GITHUB_ENV
+            echo "MODE_MSG=👀 DEEP SCAN (MEDIUM)" >> $GITHUB_ENV
+          else
+            echo "TODAY_SEVERITY=low" >> $GITHUB_ENV
+            echo "MODE_MSG=🧹 CLEANUP (LOW)" >> $GITHUB_ENV
+          fi
+          
+          echo "📅 Day of Year: $DAY_OF_YEAR"
+
+      # 4. الفحص المتغير (مع الحفاظ على الأمان ضد الأخطاء)
+      - name: Split & Rotating Attack (Unit ${{ matrix.shard }})
+        run: |
+          echo "🚀 Starting Mission: ${{ env.MODE_MSG }}"
+          
           if [ ! -f previous_live.txt ]; then
             echo "⚠️ No targets found."
             exit 0
@@ -60,25 +89,24 @@ jobs:
           tail -n +$START_LINE previous_live.txt | head -n $LINES_PER_SHARD > target_shard.txt
           
           DOMAIN_COUNT=$(wc -l < target_shard.txt)
-          echo "🔥 Elite Unit #${{ matrix.shard }} attacking $DOMAIN_COUNT targets..."
+          echo "🐜 Unit #${{ matrix.shard }} attacking $DOMAIN_COUNT targets..."
 
-          # --- التعديلات النهائية ---
-          # 1. Severity: high,critical (فقط الأخطر والأسرع)
-          # 2. Output: findings.txt (نص) لحل مشكلة العملية 40
-          # 3. Rate Limit: 5 (عشان البان)
+          # --- الفحص الذكي والآمن ---
+          # 1. Severity: متغير يومي (بيقلل الحمل 75%)
+          # 2. Output: findings.txt (نصي) -> ممنوع استخدام JSON هنا عشان نتفادى الخطأ القديم
           
           nuclei -l target_shard.txt \
             -rl 5 -bs 2 -c 2 \
-            -severity high,critical \
+            -severity ${{ env.TODAY_SEVERITY }} \
             -timeout 6 \
             -o findings.txt \
             -silent || true
 
           if [ -s findings.txt ]; then
-            echo "🚨 Critical Vulnerabilities Found!"
+            echo "🔥 Vulnerabilities Found!"
           fi
 
-      # 4. التبليغ
+      # 5. التبليغ (ذكي جداً وبيقولك نوع اليوم)
       - name: Send Report
         if: always()
         env:
@@ -88,9 +116,9 @@ jobs:
           if [ -s findings.txt ]; then
             COUNT=$(wc -l < findings.txt)
             
-            MSG="🚨 *ELITE Unit Hit! (#${{ matrix.shard }})*
+            MSG="🔄 *Rotating Unit Hit! (#${{ matrix.shard }})*
+            📅 Mode: *${{ env.MODE_MSG }}*
             🎯 Targets: $(wc -l < target_shard.txt)
-            🔥 Severity: HIGH / CRITICAL ONLY
             💣 Found: ${COUNT} Vulnerabilities
             
             📂 *Report attached.*"
@@ -103,7 +131,7 @@ jobs:
             curl -s -X POST "https://api.telegram.org/bot$TG_TOKEN/sendDocument" \
               -F chat_id="$TG_CHAT" \
               -F document=@findings.txt \
-              -F caption="📄 Elite Report Unit ${{ matrix.shard }}"
+              -F caption="📄 ${{ env.TODAY_SEVERITY }} Report - Unit ${{ matrix.shard }}"
           else
             echo "✅ Unit ${{ matrix.shard }} Clean."
           fi
