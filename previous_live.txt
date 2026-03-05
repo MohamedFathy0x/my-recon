@@ -14,6 +14,7 @@ http://access.hr.sdworx.com
 http://aditro.sdworx.com
 http://admin.huapii.com
 http://admin.huapii.com:8080
+http://afe.sdworx.co.uk
 http://alice.staging.huapii.com
 http://alice.staging.huapii.com:8080
 http://alice.staging.huapii.com:8443
@@ -101,6 +102,7 @@ http://design.sdworx.com
 http://dev.huapii.com
 http://dev.huapii.com:8080
 http://dev.huapii.com:8443
+http://digifaq.sdworx.com
 http://discover.test.huapii.com
 http://discover.test.huapii.com:8080
 http://discover.test.huapii.com:8443
@@ -133,6 +135,7 @@ http://engagement.sdworx.com
 http://event.sdworx.com
 http://events.sdworx.com
 http://feedback.sdworx.com
+http://fidelis-kundenbereich.sdworx.com
 http://fk2za2zp4hlw.sdworx.huapii.com
 http://fk2za2zp4hlw.sdworx.huapii.com:8080
 http://flow.lon.acc.sdworx.com
@@ -178,6 +181,7 @@ http://hr.sdworx.com
 http://hr.sdworx.de
 http://hrafdeling.cobra.sdworx.com
 http://hre.sdworx.co.uk
+http://hre3.sdworx.co.uk
 http://hrevolution.sdworx.co.uk
 http://huapii.com
 http://huapii.com:8080
@@ -205,7 +209,6 @@ http://kristof.test.huapii.com:8080
 http://kristof.test.huapii.com:8443
 http://learning.sdworx.com
 http://learningfr.sdworx.com
-http://link.staffing.sdworx.com
 http://lms-cms.prd.sdworx.com
 http://login.acc.myworkandme.com
 http://login.acc.sdworx.com
@@ -245,6 +248,7 @@ http://mysdsupport.sdworx.fr:443
 http://mysdsupport.sdworx.fr:8080
 http://mysdsupport.sdworx.fr:8443
 http://mysupport.acc.sdworx.com
+http://mysupport.sdworx.com
 http://myworkandme.com
 http://nl3msvq3nja6.test.huapii.com
 http://nl3msvq3nja6.test.huapii.com:8080
@@ -254,7 +258,6 @@ http://nordics.huapii.com:8080
 http://nordics.huapii.com:8443
 http://nordicsupport.sdworx.com
 http://nordicsupporttest.sdworx.com
-http://npapi.sdworx.co.uk
 http://olddesign.sdworx.com
 http://payroll.sdworx.co.uk
 http://people.huapii.com
@@ -328,6 +331,7 @@ http://sergio.huapii.com:8080
 http://sergio.huapii.com:8443
 http://service.sdworx.nl
 http://shop.acc.sdworx.com
+http://shop.sdworx.com
 http://sign.sdworx.com
 http://smartocr.sdworx.com
 http://spain.huapii.com
@@ -350,6 +354,7 @@ http://staffingjobs.sdworx.com
 http://staging.huapii.com
 http://staging.huapii.com:8080
 http://staging.huapii.com:8443
+http://supportconsole1.sdworx.co.uk
 http://survey.sdworx.com
 http://tags.sdworx.com
 http://telenet-uat.huapii.com
@@ -387,6 +392,8 @@ http://webdisk.admin.huapii.com
 http://webdisk.admin.huapii.com:8080
 http://webdisk.huapii.com
 http://webdisk.huapii.com:8080
+http://wfm.sdworx.co.uk
+http://wfmmands.sdworx.co.uk
 http://wfmuat.sdworx.co.uk
 http://wg5tujhsjzyj.huapii.com.huapii.com
 http://wg5tujhsjzyj.huapii.com.huapii.com:8080
@@ -395,6 +402,7 @@ http://whm.huapii.com:8080
 http://www.admin.huapii.com
 http://www.admin.huapii.com:8080
 http://www.flexincomeplan.com
+http://www.heli.sdworx.nl
 http://www.huapii.com
 http://www.huapii.com:8080
 http://www.myworkandme.com
@@ -434,6 +442,7 @@ https://aditro.sdworx.com
 https://admin.huapii.com
 https://admin.huapii.com:8443
 https://adsanddata.huapii.com
+https://afe.sdworx.co.uk
 https://agomab.huapii.com
 https://alice.staging.huapii.com
 https://alice.test.huapii.com
@@ -510,6 +519,7 @@ https://connector-admin.hr.dev.sdworx.com
 https://connector-admin.hr.devx.sdworx.com
 https://connector-admin.hr.sdworx.com
 https://connector-docs.hr.acc.sdworx.com
+https://connector-docs.hr.dev.sdworx.com
 https://connector-docs.hr.devx.sdworx.com
 https://connector-docs.hr.sdworx.com
 https://country-cms.prd.sdworx.com
@@ -534,6 +544,7 @@ https://dev3.dev.huapii.com
 https://dev4.dev.huapii.com
 https://dev5.dev.huapii.com
 https://dev6.dev.huapii.com
+https://digifaq.sdworx.com
 https://discover.test.huapii.com
 https://discovery.test.huapii.com
 https://docs.hr.acc.sdworx.com
@@ -555,6 +566,7 @@ https://ensurcompany.huapii.com
 https://event.sdworx.com
 https://events.sdworx.com
 https://feedback.sdworx.com
+https://fidelis-kundenbereich.sdworx.com
 https://fk2za2zp4hlw.sdworx.huapii.com
 https://fk2za2zp4hlw.sdworx.huapii.com:8443
 https://flow.lon.acc.sdworx.com
@@ -597,6 +609,7 @@ https://hr.sdworx.com
 https://hr.sdworx.de
 https://hrafdeling.cobra.sdworx.com
 https://hre.sdworx.co.uk
+https://hre3.sdworx.co.uk
 https://hrevolution.sdworx.co.uk
 https://hrvpncloud.fidelis.sdworx.de
 https://huapii.com
@@ -658,6 +671,7 @@ https://my.sdworx.co.uk
 https://my.sdworx.com
 https://myaccount.acc.sdworx.com
 https://myaccount.sdworx.com
+https://mysupport.sdworx.com
 https://myworkandme.com
 https://ncardia.huapii.com
 https://ngage.huapii.com
@@ -666,7 +680,6 @@ https://nl3msvq3nja6.test.huapii.com
 https://nordics.huapii.com
 https://nordicsupport.sdworx.com
 https://nordicsupporttest.sdworx.com
-https://npapi.sdworx.co.uk
 https://olddesign.sdworx.com
 https://oneteam.huapii.com
 https://onsdoel.huapii.com
@@ -704,7 +717,6 @@ https://s3zsdm6tq2rb.dpgmedia.huapii.com
 https://s3zsdm6tq2rb.dpgmedia.huapii.com:8443
 https://scs-acc.sdworx.com
 https://scs-dev.sdworx.com
-https://scs-link.sdworx.com
 https://scs.acc.sdworx.com
 https://scs.dev.sdworx.com
 https://scs.sdworx.com
@@ -753,6 +765,7 @@ https://sparc.test.huapii.com
 https://staffing-cms.prd.sdworx.com
 https://staffingjobs.sdworx.com
 https://staging.huapii.com
+https://supportconsole1.sdworx.co.uk
 https://survey.sdworx.com
 https://tags.sdworx.com
 https://talenthunt.huapii.com
@@ -779,6 +792,8 @@ https://webdisk.admin.huapii.com
 https://webdisk.admin.huapii.com:8443
 https://webdisk.huapii.com
 https://webdisk.huapii.com:8443
+https://wfm.sdworx.co.uk
+https://wfmmands.sdworx.co.uk
 https://wfmuat.sdworx.co.uk
 https://wg5tujhsjzyj.huapii.com.huapii.com
 https://wg5tujhsjzyj.huapii.com.huapii.com:8443
@@ -787,6 +802,7 @@ https://whm.huapii.com:8443
 https://wicreations.huapii.com
 https://www.admin.huapii.com
 https://www.admin.huapii.com:8443
+https://www.heli.sdworx.nl
 https://www.huapii.com
 https://www.huapii.com:8443
 https://www.myworkandme.com
