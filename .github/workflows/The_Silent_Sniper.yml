@@ -1,4 +1,4 @@
-name: V75 - The Perfect Rotation (Smart & Safe)
+name: V76 - The Rotation (Nuclei scanner)
 
 on:
   schedule:
@@ -29,7 +29,7 @@ jobs:
           go-version: '1.21'
           cache: false
 
-      # 2. التثبيت من المصدر (النسخة الكاملة 2320 سطر)
+      # 2. التثبيت من المصدر
       - name: Install Nuclei from Source (Full Build)
         run: |
           sudo apt-get update && sudo apt-get install -y jq curl parallel libpcap-dev bind9-host
@@ -45,16 +45,16 @@ jobs:
           echo "✅ Nuclei Version:"
           nuclei -version
 
-      # 3. العقل المدبر: تحديد نوع الفحص لليوم الحالي (بدون أخطاء)
+      # 3. العقل المدبر: تحديد نوع الفحص (بدون Low)
       - name: Determine Daily Combat Mode
         id: mode
         run: |
-          # بنجيب رقم اليوم في السنة (تلقائي)
-          # العلامة - عشان يشيل الصفر اللي على الشمال ويمنع مشاكل حسابية
+          # بنجيب رقم اليوم في السنة
           DAY_OF_YEAR=$(date +%-j)
           
-          # باقي القسمة على 4
-          ROTATION=$(( $DAY_OF_YEAR % 4 ))
+          # باقي القسمة على 3 فقط (عشان عندنا 3 أنواع بس)
+          # النتيجة هتكون 0 أو 1 أو 2
+          ROTATION=$(( $DAY_OF_YEAR % 3 ))
           
           if [ "$ROTATION" -eq 0 ]; then
             echo "TODAY_SEVERITY=critical" >> $GITHUB_ENV
@@ -62,17 +62,15 @@ jobs:
           elif [ "$ROTATION" -eq 1 ]; then
             echo "TODAY_SEVERITY=high" >> $GITHUB_ENV
             echo "MODE_MSG=⚔️ HEAVY ASSAULT (HIGH)" >> $GITHUB_ENV
-          elif [ "$ROTATION" -eq 2 ]; then
+          else
+            # الحالة الأخيرة هي medium (بدل low)
             echo "TODAY_SEVERITY=medium" >> $GITHUB_ENV
             echo "MODE_MSG=👀 DEEP SCAN (MEDIUM)" >> $GITHUB_ENV
-          else
-            echo "TODAY_SEVERITY=low" >> $GITHUB_ENV
-            echo "MODE_MSG=🧹 CLEANUP (LOW)" >> $GITHUB_ENV
           fi
           
           echo "📅 Day of Year: $DAY_OF_YEAR"
 
-      # 4. الفحص المتغير (مع الحفاظ على الأمان ضد الأخطاء)
+      # 4. الفحص المتغير
       - name: Split & Rotating Attack (Unit ${{ matrix.shard }})
         run: |
           echo "🚀 Starting Mission: ${{ env.MODE_MSG }}"
@@ -91,10 +89,7 @@ jobs:
           DOMAIN_COUNT=$(wc -l < target_shard.txt)
           echo "🐜 Unit #${{ matrix.shard }} attacking $DOMAIN_COUNT targets..."
 
-          # --- الفحص الذكي والآمن ---
-          # 1. Severity: متغير يومي (بيقلل الحمل 75%)
-          # 2. Output: findings.txt (نصي) -> ممنوع استخدام JSON هنا عشان نتفادى الخطأ القديم
-          
+          # --- الفحص ---
           nuclei -l target_shard.txt \
             -rl 5 -bs 2 -c 2 \
             -severity ${{ env.TODAY_SEVERITY }} \
@@ -106,7 +101,7 @@ jobs:
             echo "🔥 Vulnerabilities Found!"
           fi
 
-      # 5. التبليغ (ذكي جداً وبيقولك نوع اليوم)
+      # 5. التبليغ
       - name: Send Report
         if: always()
         env:
