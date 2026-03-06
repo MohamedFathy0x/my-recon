@@ -635,7 +635,6 @@ https://learning.sdworx.com
 https://learningfr.sdworx.com
 https://leonidas.huapii.com
 https://lid-hcm.fidelis.sdworx.de
-https://link.staffing.sdworx.com
 https://lms-cms.prd.sdworx.com
 https://login.acc.myworkandme.com
 https://login.acc.sdworx.com
@@ -655,6 +654,7 @@ https://lt5idpzmdhg4.protime.huapii.com:8443
 https://mail.huapii.com
 https://mail.huapii.com:8443
 https://mailer.notify.sdworx.com
+https://managedservice.fidelis.sdworx.com
 https://marketing.hr.acc.sdworx.com
 https://marketing.hr.dev.sdworx.com
 https://marketing.hr.devx.sdworx.com
