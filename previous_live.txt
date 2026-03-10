@@ -209,7 +209,6 @@ http://kristof.test.huapii.com:8080
 http://kristof.test.huapii.com:8443
 http://learning.sdworx.com
 http://learningfr.sdworx.com
-http://link.staffing.sdworx.com
 http://lms-cms.prd.sdworx.com
 http://login.acc.myworkandme.com
 http://login.acc.sdworx.com
@@ -298,7 +297,6 @@ http://s3zsdm6tq2rb.dpgmedia.huapii.com
 http://s3zsdm6tq2rb.dpgmedia.huapii.com:8080
 http://scs-acc.sdworx.com
 http://scs-dev.sdworx.com
-http://scs-link.sdworx.com
 http://scs.acc.sdworx.com
 http://scs.dev.sdworx.com
 http://scs.sdworx.com
@@ -518,6 +516,7 @@ https://config.hr.devx.sdworx.com
 https://config.hr.sdworx.com
 https://connector-admin.hr.acc.sdworx.com
 https://connector-admin.hr.dev.sdworx.com
+https://connector-admin.hr.devx.sdworx.com
 https://connector-admin.hr.sdworx.com
 https://connector-docs.hr.acc.sdworx.com
 https://connector-docs.hr.dev.sdworx.com
@@ -636,7 +635,6 @@ https://learning.sdworx.com
 https://learningfr.sdworx.com
 https://leonidas.huapii.com
 https://lid-hcm.fidelis.sdworx.de
-https://link.staffing.sdworx.com
 https://lms-cms.prd.sdworx.com
 https://login.acc.myworkandme.com
 https://login.acc.sdworx.com
