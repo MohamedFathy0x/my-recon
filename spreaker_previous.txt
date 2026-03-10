@@ -1,5 +1,6 @@
 http://1password-scim.spreaker.com
 http://api.spreaker.com
+http://autodiscover.spreaker.com
 http://developers.spreaker.com
 http://download.spreaker.com
 http://en-us.spreaker.com
@@ -11,7 +12,7 @@ http://pay.spreaker.com
 http://pay.spreaker.com:8080
 http://pay.spreaker.com:8443
 http://pt-br.spreaker.com
-http://spreaker.com
+http://transcription.spreaker.com
 http://widget.spreaker.com
 http://www.spreaker.com
 http://yieldopt.spreaker.com
@@ -25,8 +26,7 @@ https://facebook.spreaker.com
 https://it-it.spreaker.com
 https://news.spreaker.com
 https://pay.spreaker.com
-https://pt-br.spreaker.com
-https://spreaker.com
+https://transcription.spreaker.com
 https://widget.spreaker.com
 https://www.spreaker.com
 https://yieldopt.spreaker.com
