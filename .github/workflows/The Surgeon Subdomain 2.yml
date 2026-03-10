@@ -15,6 +15,7 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v4
 
+      # 1. إلغاء الكاش لمنع رسائل التحذير
       - name: Setup Go
         uses: actions/setup-go@v5
         with:
@@ -38,13 +39,15 @@ jobs:
           
           rm *.zip
 
+      # 2. تحديد الـ Scope بدقة (شامل كل الـ Assets المسموحة)
       - name: Define Precise Scope
         run: |
           cat <<EOF > scope.txt
           spreaker.com
           EOF
+          # تنظيف المسافات
           sed -i 's/^[ \t]*//;s/[ \t]*$//' scope.txt
-          echo "Scope loaded. Base domains: $(wc -l < scope.txt)"
+          echo "✅ Scope loaded. Base domains: $(wc -l < scope.txt)"
 
       - name: Triple-Threat Enumeration (Timeout Protected)
         env:
@@ -62,17 +65,22 @@ jobs:
           
           cat scope.txt sub1.txt sub2.txt sub3.txt | tr '[:upper:]' '[:lower:]' | sed 's/\*\.//g' | sort -u > unique_subs.txt
 
+      # 3. الفحص الحي + الفلترة النهائية للتأكد من الـ Scope
       - name: Check Alive & Filter (Strict 5 req/sec)
         run: |
+          # فحص البورتات الأساسية والخاصة بالـ Staging
           httpx -l unique_subs.txt -silent \
             -p 80,443,8080,8443,8081,9000,9443 \
             -H "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120.0.0.0" \
             -rl 5 -t 5 \
             -o current_live_raw.txt
           
+          # أهم خطوة: التأكد إن الدومين اللي طلع موجود جوه الـ Scope بتاعنا
           touch current_live.txt
+          # بنستخدم grep عشان ناخد بس السطور اللي بتطابق نهايات ملف scope.txt
           grep -Ff scope.txt current_live_raw.txt > temp_live.txt || true
           
+          # استبعاد النطاقات المرفوضة حسب سياسة البرنامج
           cat <<EOF > out_of_scope.txt
           blog.spreaker.com
           try.spreaker.com
@@ -85,6 +93,7 @@ jobs:
           EOF
           
           grep -vFf out_of_scope.txt temp_live.txt > current_live.txt || true
+          
           sort -u current_live.txt -o current_live.txt
 
       - name: Diff Logic (Extract New)
@@ -97,6 +106,7 @@ jobs:
           NEW_COUNT=$(wc -l < new_domains.txt)
           echo "NEW_COUNT=$NEW_COUNT" >> $GITHUB_ENV
 
+      # 4. التبليغ بملف مرفق (الحل الجذري)
       - name: Send Telegram File Alert
         if: always()
         env:
@@ -105,22 +115,28 @@ jobs:
         run: |
           if [ "${{ env.NEW_COUNT }}" -gt "0" ]; then
             
-            MSG="Spreaker Radar Alert! Found ${NEW_COUNT} NEW targets. Full list attached below."
+            MSG="🚨 *Spreaker Radar Alert!*
+            🎯 Found ${NEW_COUNT} NEW targets.
+            📂 Full list attached below."
             
+            # 1. رسالة تنبيه
             curl -s -X POST "https://api.telegram.org/bot$TG_TOKEN/sendMessage" \
               -d chat_id="$TG_CHAT" \
-              --data-urlencode text="$MSG"
+              --data-urlencode text="$MSG" \
+              -d parse_mode="Markdown"
             
+            # 2. إرسال الملف (Document)
             curl -s -X POST "https://api.telegram.org/bot$TG_TOKEN/sendDocument" \
               -F chat_id="$TG_CHAT" \
               -F document=@new_domains.txt \
-              -F caption="Full Spreaker Domains List"
+              -F caption="📄 Full New Domains List ($(date +%F))"
               
           else
-            MSG="Spreaker Radar Clean. No new targets today."
+            MSG="✅ *Radar Clean.* No new targets today."
             curl -s -X POST "https://api.telegram.org/bot$TG_TOKEN/sendMessage" \
               -d chat_id="$TG_CHAT" \
-              --data-urlencode text="$MSG"
+              --data-urlencode text="$MSG" \
+              -d parse_mode="Markdown"
           fi
 
       - name: Update Radar Memory
@@ -137,6 +153,6 @@ jobs:
           if git diff --staged --quiet; then
             echo "No memory changes"
           else
-            git commit -m "Spreaker Radar Update"
+            git commit -m "Radar Update: Cleaned scope baseline"
             git push
           fi
