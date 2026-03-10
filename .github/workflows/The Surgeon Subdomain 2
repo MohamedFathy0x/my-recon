@@ -1,0 +1,142 @@
+name: Spreaker - The Surgeon (Subdomain enumeration)
+
+on:
+  schedule:
+    - cron: '0 0 * * *'
+  workflow_dispatch:
+
+jobs:
+  radar-job:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.21'
+          cache: false
+
+      - name: Install Hunting Arsenal
+        run: |
+          sudo apt-get update && sudo apt-get install -y jq wget unzip curl
+          
+          wget -q https://github.com/projectdiscovery/subfinder/releases/download/v2.6.6/subfinder_2.6.6_linux_amd64.zip
+          unzip -o -q subfinder_2.6.6_linux_amd64.zip
+          sudo mv subfinder /usr/local/bin/
+          
+          wget -q https://github.com/projectdiscovery/httpx/releases/download/v1.6.0/httpx_1.6.0_linux_amd64.zip
+          unzip -o -q httpx_1.6.0_linux_amd64.zip
+          sudo mv httpx /usr/local/bin/
+          
+          go install github.com/tomnomnom/assetfinder@latest
+          sudo cp ~/go/bin/assetfinder /usr/local/bin/
+          
+          rm *.zip
+
+      - name: Define Precise Scope
+        run: |
+          cat <<EOF > scope.txt
+          spreaker.com
+          EOF
+          sed -i 's/^[ \t]*//;s/[ \t]*$//' scope.txt
+          echo "Scope loaded. Base domains: $(wc -l < scope.txt)"
+
+      - name: Triple-Threat Enumeration (Timeout Protected)
+        env:
+          GITHUB_TOKEN: ${{ secrets.GH_PAT }}
+          CHAOS_KEY: ${{ secrets.CHAOS_KEY }}
+          SHODAN_API_KEY: ${{ secrets.SHODAN_API_KEY }}
+          SECURITYTRAILS_TOKEN: ${{ secrets.SECURITYTRAILS_TOKEN }}
+        run: |
+          subfinder -dL scope.txt -all -silent -o sub1.txt || true
+          cat scope.txt | assetfinder --subs-only > sub2.txt || true
+          
+          cat scope.txt | while read domain; do
+            curl -s --max-time 20 "https://crt.sh/?q=%25.$domain&output=json" | jq -r '.[].name_value' 2>/dev/null >> sub3.txt || true
+          done
+          
+          cat scope.txt sub1.txt sub2.txt sub3.txt | tr '[:upper:]' '[:lower:]' | sed 's/\*\.//g' | sort -u > unique_subs.txt
+
+      - name: Check Alive & Filter (Strict 5 req/sec)
+        run: |
+          httpx -l unique_subs.txt -silent \
+            -p 80,443,8080,8443,8081,9000,9443 \
+            -H "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120.0.0.0" \
+            -rl 5 -t 5 \
+            -o current_live_raw.txt
+          
+          touch current_live.txt
+          grep -Ff scope.txt current_live_raw.txt > temp_live.txt || true
+          
+          cat <<EOF > out_of_scope.txt
+          blog.spreaker.com
+          try.spreaker.com
+          help.spreaker.com
+          elasticemail.spreaker.com
+          elasticmta1.spreaker.com
+          elasticmta2.spreaker.com
+          careers.spreaker.com
+          open.spreaker.com
+          EOF
+          
+          grep -vFf out_of_scope.txt temp_live.txt > current_live.txt || true
+          sort -u current_live.txt -o current_live.txt
+
+      - name: Diff Logic (Extract New)
+        run: |
+          touch spreaker_previous.txt
+          sort spreaker_previous.txt > old_sorted.txt
+          
+          comm -23 current_live.txt old_sorted.txt > new_domains.txt
+          
+          NEW_COUNT=$(wc -l < new_domains.txt)
+          echo "NEW_COUNT=$NEW_COUNT" >> $GITHUB_ENV
+
+      - name: Send Telegram File Alert
+        if: always()
+        env:
+          TG_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
+          TG_CHAT: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: |
+          if [ "${{ env.NEW_COUNT }}" -gt "0" ]; then
+            
+            MSG="Spreaker Radar Alert! Found ${NEW_COUNT} NEW targets. Full list attached below."
+            
+            curl -s -X POST "https://api.telegram.org/bot$TG_TOKEN/sendMessage" \
+              -d chat_id="$TG_CHAT" \
+              --data-urlencode text="$MSG"
+            
+            curl -s -X POST "https://api.telegram.org/bot$TG_TOKEN/sendDocument" \
+              -F chat_id="$TG_CHAT" \
+              -F document=@new_domains.txt \
+              -F caption="Full Spreaker Domains List"
+              
+          else
+            MSG="Spreaker Radar Clean. No new targets today."
+            curl -s -X POST "https://api.telegram.org/bot$TG_TOKEN/sendMessage" \
+              -d chat_id="$TG_CHAT" \
+              --data-urlencode text="$MSG"
+          fi
+
+      - name: Update Radar Memory
+        run: |
+          git config --global user.name "Radar Bot"
+          git config --global user.email "radar-bot@noreply.com"
+          
+          git pull origin main --rebase || true
+          
+          mv current_live.txt spreaker_previous.txt
+          
+          git add spreaker_previous.txt
+          
+          if git diff --staged --quiet; then
+            echo "No memory changes"
+          else
+            git commit -m "Spreaker Radar Update"
+            git push
+          fi
