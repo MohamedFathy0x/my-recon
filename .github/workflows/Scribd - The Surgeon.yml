@@ -1,0 +1,170 @@
+name: Scribd - The Surgeon (Subdomain enumeration)
+
+on:
+  schedule:
+    - cron: '0 0 * * *'
+  workflow_dispatch:
+
+jobs:
+  radar-job:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.21'
+          cache: false
+
+      # 1. تسطيب الترسانة (إضافة أدوات الحفر العميق)
+      - name: Install Hunting Arsenal
+        run: |
+          sudo apt-get update && sudo apt-get install -y jq wget unzip curl
+          
+          # أدوات الفحص المتقدمة
+          go install -v github.com/projectdiscovery/subfinder/v2/cmd/subfinder@latest
+          go install -v github.com/projectdiscovery/httpx/cmd/httpx@latest
+          go install -v github.com/projectdiscovery/katana/cmd/katana@latest
+          
+          go install github.com/tomnomnom/assetfinder@latest
+          go install github.com/lc/gau/v2/cmd/gau@latest
+          go install github.com/tomnomnom/unfurl@latest
+          
+          sudo cp ~/go/bin/* /usr/local/bin/
+
+      - name: Define Precise Scope
+        run: |
+          cat <<EOF > scope.txt
+          scribd.com
+          EOF
+          sed -i 's/^[ \t]*//;s/[ \t]*$//' scope.txt
+          echo "✅ Scope loaded."
+
+      # 2. الهجوم العنيف والمتخفي (متوافق مع قوانين Inspectiv)
+      - name: Stealth & Aggressive Enumeration
+        env:
+          GITHUB_TOKEN: ${{ secrets.GH_PAT }}
+          CHAOS_KEY: ${{ secrets.CHAOS_KEY }}
+          SHODAN_API_KEY: ${{ secrets.SHODAN_API_KEY }}
+          SECURITYTRAILS_TOKEN: ${{ secrets.SECURITYTRAILS_TOKEN }}
+        run: |
+          # تفعيل مفاتيح الـ API لزيادة النتائج (آمن 100%)
+          mkdir -p ~/.config/subfinder
+          cat <<EOF > ~/.config/subfinder/provider-config.yaml
+          shodan:
+            - $SHODAN_API_KEY
+          securitytrails:
+            - $SECURITYTRAILS_TOKEN
+          chaos:
+            - $CHAOS_KEY
+          github:
+            - $GITHUB_TOKEN
+          EOF
+
+          echo "🔍 1. Running Advanced Passive Recon (Safe)..."
+          subfinder -dL scope.txt -all -silent -o sub1.txt || true
+          cat scope.txt | assetfinder --subs-only > sub2.txt || true
+          
+          cat scope.txt | while read domain; do
+            curl -s --max-time 20 "https://crt.sh/?q=%25.$domain&output=json" | jq -r '.[].name_value' 2>/dev/null >> sub3.txt || true
+          done
+
+          echo "🕰️ 2. Digging Internet Archives (Wayback Machine) (Safe)..."
+          cat scope.txt | gau --subs | unfurl domains > sub4.txt || true
+
+          # تجميع النتائج السلبية
+          cat scope.txt sub1.txt sub2.txt sub3.txt sub4.txt | tr '[:upper:]' '[:lower:]' | sed 's/\*\.//g' | sort -u > raw_passive.txt
+
+          echo "🕷️ 3. Stealth Deep Crawling (Rate-Limited < 10 req/s per rules)..."
+          # استخدام Katana بحذر: 5 طلبات في الثانية، مع إضافة الهيدر الإجباري الخاص بالبرنامج مدمج مباشرة
+          cat raw_passive.txt | httpx -silent -rl 5 -t 5 -H "X-Inspectiv-Tester: TheEagle" | katana -silent -jc -d 2 -rl 5 -c 2 -H "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36" -H "X-Inspectiv-Tester: TheEagle" | unfurl domains > sub5.txt || true
+
+          # تجميع وتصفية النطاقات النهائية الخاصة بالهدف فقط (واستبعاد everand.com تلقائياً)
+          cat raw_passive.txt sub5.txt | grep -i "\.scribd\.com$" | sort -u > unique_subs.txt
+          echo "🔥 Total Unique Subs found before live check: $(wc -l < unique_subs.txt)"
+
+      # 3. الفحص الحي + الفلترة النهائية للتأكد من الـ Scope (آمن جداً)
+      - name: Check Alive & Filter (Strict 5 req/sec)
+        run: |
+          # الفحص بسرعة بطيئة وآمنة جداً (5 طلبات في الثانية للتوافق مع شروط <10)
+          httpx -l unique_subs.txt -silent \
+            -p 80,443,8080,8443,8081,9000,9443 \
+            -H "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120.0.0.0" \
+            -H "X-Inspectiv-Tester: TheEagle" \
+            -rl 5 -t 5 \
+            -o current_live_raw.txt
+          
+          touch current_live.txt
+          grep -Ff scope.txt current_live_raw.txt > temp_live.txt || true
+          
+          # يمكنك إضافة أي نطاقات فرعية غير مرغوب فيها هنا مستقبلاً
+          cat <<EOF > out_of_scope.txt
+          # add known out-of-scope subdomains here if discovered later
+          EOF
+          
+          grep -vFf out_of_scope.txt temp_live.txt > current_live.txt || true
+          sort -u current_live.txt -o current_live.txt
+
+      - name: Diff Logic (Extract New)
+        run: |
+          touch scribd_previous.txt
+          sort scribd_previous.txt > old_sorted.txt
+          
+          comm -23 current_live.txt old_sorted.txt > new_domains.txt
+          
+          NEW_COUNT=$(wc -l < new_domains.txt)
+          echo "NEW_COUNT=$NEW_COUNT" >> $GITHUB_ENV
+
+      # 4. التبليغ بملف مرفق
+      - name: Send Telegram File Alert
+        if: always()
+        env:
+          TG_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
+          TG_CHAT: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: |
+          if [ "${{ env.NEW_COUNT }}" -gt "0" ]; then
+            
+            MSG="🚨 *Scribd Radar Alert! (STEALTH SCAN)*
+            🎯 Found ${NEW_COUNT} NEW hidden targets.
+            📂 Full list attached below."
+            
+            curl -s -X POST "https://api.telegram.org/bot$TG_TOKEN/sendMessage" \
+              -d chat_id="$TG_CHAT" \
+              --data-urlencode text="$MSG" \
+              -d parse_mode="Markdown"
+            
+            curl -s -X POST "https://api.telegram.org/bot$TG_TOKEN/sendDocument" \
+              -F chat_id="$TG_CHAT" \
+              -F document=@new_domains.txt \
+              -F caption="📄 Full Scribd Stealth List ($(date +%F))"
+              
+          else
+            MSG="✅ *Scribd Radar Clean.* No new targets today."
+            curl -s -X POST "https://api.telegram.org/bot$TG_TOKEN/sendMessage" \
+              -d chat_id="$TG_CHAT" \
+              --data-urlencode text="$MSG" \
+              -d parse_mode="Markdown"
+          fi
+
+      - name: Update Radar Memory
+        run: |
+          git config --global user.name "Radar Bot"
+          git config --global user.email "radar-bot@noreply.com"
+          
+          git pull origin main --rebase || true
+          
+          mv current_live.txt scribd_previous.txt
+          
+          git add scribd_previous.txt
+          
+          if git diff --staged --quiet; then
+            echo "No memory changes"
+          else
+            git commit -m "Scribd Radar Update: Stealth scope baseline"
+            git push
+          fi
