@@ -132,7 +132,6 @@ http://sk.scribd.com
 http://sl.scribd.com
 http://sq.scribd.com
 http://sr.scribd.com
-http://ssh.blog.scribd.com
 http://staging.corp.scribd.com
 http://support-sandbox.scribd.com
 http://support-sandbox.scribd.com:8080
@@ -162,7 +161,6 @@ http://vi.scribd.com
 http://wa.development.scribd.com
 http://wa.production.scribd.com
 http://wa.scribd.com
-http://www.blog.scribd.com
 http://www.development.corp.scribd.com
 http://www.scribd.com
 http://www.staging.corp.scribd.com
@@ -263,6 +261,7 @@ https://ne.scribd.com
 https://nl.scribd.com
 https://nn.scribd.com
 https://origin-s.scribd.com
+https://pl.scribd.com
 https://previews.scribd.com
 https://prueba.scribd.com
 https://pt.development.corp.scribd.com
@@ -318,7 +317,6 @@ https://vi.scribd.com
 https://wa.development.scribd.com
 https://wa.production.scribd.com
 https://wa.scribd.com
-https://www.blog.scribd.com
 https://www.development.corp.scribd.com
 https://www.scribd.com
 https://www.staging.corp.scribd.com
