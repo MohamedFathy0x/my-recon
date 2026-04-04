@@ -1,5 +1,4 @@
 http://ab.scribd.com
-http://adamf.devkube.scribd.com
 http://af.scribd.com
 http://am.scribd.com
 http://api.development.corp.scribd.com
@@ -132,6 +131,7 @@ http://sk.scribd.com
 http://sl.scribd.com
 http://sq.scribd.com
 http://sr.scribd.com
+http://ssh.blog.scribd.com
 http://staging.corp.scribd.com
 http://support-sandbox.scribd.com
 http://support-sandbox.scribd.com:8080
@@ -167,7 +167,6 @@ http://www.staging.corp.scribd.com
 http://yi.scribd.com
 http://zh.scribd.com
 https://ab.scribd.com
-https://adamf.devkube.scribd.com
 https://af.scribd.com
 https://am.scribd.com
 https://api.development.corp.scribd.com
@@ -196,7 +195,6 @@ https://cy.scribd.com
 https://d.scribd.com
 https://da.scribd.com
 https://de.development.corp.scribd.com
-https://de.scribd.com
 https://de.staging.corp.scribd.com
 https://development.corp.scribd.com
 https://devkube.development.scribd.com
@@ -257,7 +255,6 @@ https://ml.scribd.com
 https://mobile-private.scribd.com
 https://mobile.scribd.com
 https://ms.scribd.com
-https://ne.scribd.com
 https://nl.scribd.com
 https://nn.scribd.com
 https://origin-s.scribd.com
