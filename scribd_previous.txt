@@ -1,4 +1,5 @@
 http://ab.scribd.com
+http://adamf.devkube.scribd.com
 http://af.scribd.com
 http://am.scribd.com
 http://api.development.corp.scribd.com
@@ -161,12 +162,14 @@ http://vi.scribd.com
 http://wa.development.scribd.com
 http://wa.production.scribd.com
 http://wa.scribd.com
+http://www.blog.scribd.com
 http://www.development.corp.scribd.com
 http://www.scribd.com
 http://www.staging.corp.scribd.com
 http://yi.scribd.com
 http://zh.scribd.com
 https://ab.scribd.com
+https://adamf.devkube.scribd.com
 https://af.scribd.com
 https://am.scribd.com
 https://api.development.corp.scribd.com
@@ -195,6 +198,7 @@ https://cy.scribd.com
 https://d.scribd.com
 https://da.scribd.com
 https://de.development.corp.scribd.com
+https://de.scribd.com
 https://de.staging.corp.scribd.com
 https://development.corp.scribd.com
 https://devkube.development.scribd.com
@@ -220,7 +224,6 @@ https://fr.staging.corp.scribd.com
 https://ftp.blog.scribd.com
 https://fy.scribd.com
 https://ga.scribd.com
-https://gd.scribd.com
 https://gv.scribd.com
 https://he.scribd.com
 https://hi.scribd.com
@@ -314,6 +317,7 @@ https://vi.scribd.com
 https://wa.development.scribd.com
 https://wa.production.scribd.com
 https://wa.scribd.com
+https://www.blog.scribd.com
 https://www.development.corp.scribd.com
 https://www.scribd.com
 https://www.staging.corp.scribd.com
