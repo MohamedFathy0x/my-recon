@@ -198,7 +198,6 @@ https://cy.scribd.com
 https://d.scribd.com
 https://da.scribd.com
 https://de.development.corp.scribd.com
-https://de.scribd.com
 https://de.staging.corp.scribd.com
 https://development.corp.scribd.com
 https://devkube.development.scribd.com
@@ -224,6 +223,7 @@ https://fr.staging.corp.scribd.com
 https://ftp.blog.scribd.com
 https://fy.scribd.com
 https://ga.scribd.com
+https://gd.scribd.com
 https://gv.scribd.com
 https://he.scribd.com
 https://hi.scribd.com
@@ -258,6 +258,7 @@ https://ml.scribd.com
 https://mobile-private.scribd.com
 https://mobile.scribd.com
 https://ms.scribd.com
+https://ne.scribd.com
 https://nl.scribd.com
 https://nn.scribd.com
 https://origin-s.scribd.com
