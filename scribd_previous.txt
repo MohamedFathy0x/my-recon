@@ -1,5 +1,4 @@
 http://ab.scribd.com
-http://adamf.devkube.scribd.com
 http://af.scribd.com
 http://am.scribd.com
 http://api.development.corp.scribd.com
@@ -101,7 +100,6 @@ http://origin-s.scribd.com
 http://pl.scribd.com
 http://previews.scribd.com
 http://prueba.scribd.com
-http://prueba.scribd.com:8443
 http://pt.development.corp.scribd.com
 http://pt.scribd.com
 http://pt.staging.corp.scribd.com
@@ -169,7 +167,6 @@ http://www.staging.corp.scribd.com
 http://yi.scribd.com
 http://zh.scribd.com
 https://ab.scribd.com
-https://adamf.devkube.scribd.com
 https://af.scribd.com
 https://am.scribd.com
 https://api.development.corp.scribd.com
@@ -198,6 +195,7 @@ https://cy.scribd.com
 https://d.scribd.com
 https://da.scribd.com
 https://de.development.corp.scribd.com
+https://de.scribd.com
 https://de.staging.corp.scribd.com
 https://development.corp.scribd.com
 https://devkube.development.scribd.com
@@ -264,7 +262,6 @@ https://nn.scribd.com
 https://origin-s.scribd.com
 https://pl.scribd.com
 https://previews.scribd.com
-https://prueba.scribd.com
 https://pt.development.corp.scribd.com
 https://pt.scribd.com
 https://pt.staging.corp.scribd.com
