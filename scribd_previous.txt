@@ -124,7 +124,6 @@ http://samples.scribd.com
 http://samples.staging.scribd.com
 http://sco.scribd.com
 http://screenshots.scribd.com
-http://scribd.com
 http://sitemaps.master.scribd.com
 http://sitemaps.scribd.com
 http://sitemaps.stage.scribd.com
@@ -162,6 +161,7 @@ http://vi.scribd.com
 http://wa.development.scribd.com
 http://wa.production.scribd.com
 http://wa.scribd.com
+http://wildcard.devkube.scribd.com
 http://www.blog.scribd.com
 http://www.development.corp.scribd.com
 http://www.scribd.com
@@ -188,6 +188,7 @@ https://audio.staging.scribd.com
 https://auth.development.scribd.com
 https://auth.scribd.com
 https://bg.scribd.com
+https://blog.scribd.com
 https://br.scribd.com
 https://bs.scribd.com
 https://ca.scribd.com
@@ -287,7 +288,6 @@ https://samples.scribd.com
 https://samples.staging.scribd.com
 https://sco.scribd.com
 https://screenshots.scribd.com
-https://scribd.com
 https://sitemaps.master.scribd.com
 https://sitemaps.scribd.com
 https://sitemaps.stage.scribd.com
@@ -318,6 +318,7 @@ https://vi.scribd.com
 https://wa.development.scribd.com
 https://wa.production.scribd.com
 https://wa.scribd.com
+https://wildcard.devkube.scribd.com
 https://www.blog.scribd.com
 https://www.development.corp.scribd.com
 https://www.scribd.com
