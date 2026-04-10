@@ -16,6 +16,7 @@ http://url7903.linkdm.com
 http://www.linkdm.com
 http://www.linkdm.com:8080
 http://www.linkdm.com:8443
+http://www.partner.linkdm.com
 https://admin-partner.linkdm.com
 https://admin.linkdm.com
 https://app.linkdm.com
@@ -32,3 +33,4 @@ https://partner-api.linkdm.com
 https://partner.linkdm.com
 https://url7903.linkdm.com
 https://www.linkdm.com
+https://www.partner.linkdm.com
